@@ -1,0 +1,37 @@
+name: Build LaTeX PDF
+
+on:
+  push:
+    paths:
+      - "docs/**"
+      - ".github/workflows/build-latex.yml"
+  pull_request:
+    paths:
+      - "docs/**"
+      - ".github/workflows/build-latex.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build-latex:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Compile report
+        uses: xu-cheng/latex-action@v4
+        with:
+          root_file: report.tex
+          working_directory: docs
+
+      - name: Upload PDF
+        uses: actions/upload-artifact@v4
+        with:
+          name: delivery-dispatch-report
+          path: docs/report.pdf
+          if-no-files-found: error
+          retention-days: 30
