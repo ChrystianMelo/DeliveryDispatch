@@ -49,4 +49,8 @@ python scripts/tasks.py build
 
 O CI executa as verificações e o build com Python 3.12 no Linux e no Windows em pushes e pull requests.
 
-O relatório será escrito em [docs/report.tex](docs/report.tex), que atualmente contém apenas o título. Um workflow separado compila o PDF quando `docs/` é alterada ou por execução manual e disponibiliza o arquivo como artefato por 30 dias. A disponibilização externa do relatório será feita separadamente.
+O relatório será escrito em [docs/report.tex](docs/report.tex), que atualmente contém apenas o título. Um workflow separado compila o PDF quando `docs/` é alterada ou por execução manual. Na branch principal, o PDF é publicado e atualizado na Release `report`.
+
+[Baixar relatório em PDF](https://github.com/ChrystianMelo/DeliveryDispatch/releases/download/report/report.pdf)
+
+O link ficará disponível após a primeira publicação bem-sucedida. Em repositórios privados, o acesso exige permissão no repositório.
