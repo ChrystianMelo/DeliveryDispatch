@@ -61,8 +61,8 @@ def encode(latitude: float, longitude: float, levels: int = MAX_LEVELS) -> str:
                 bit = 0
                 latitude_max = latitude_midpoint
 
-        # Acrescenta o bit ao valor binário que formará o próximo caractere.
-        character_value = character_value * 2 + bit
+        # Atualiza o valor do caractere com o próximo bit: x = (x << 1) | bit.
+        character_value = (character_value << 1) | bit
 
         # Cada grupo de 5 bits corresponde a um caractere Base32.
         if bit_index % 5 == 4:
