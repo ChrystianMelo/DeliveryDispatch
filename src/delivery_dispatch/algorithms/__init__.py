@@ -1,5 +1,5 @@
 """Algoritmos de busca e indexação geoespacial."""
 
-from delivery_dispatch.algorithms.compact_trie import CompactTrie
+from delivery_dispatch.algorithms.compact_trie import CompactTrie, Node
 
-__all__ = ["CompactTrie"]
+__all__ = ["CompactTrie", "Node"]
