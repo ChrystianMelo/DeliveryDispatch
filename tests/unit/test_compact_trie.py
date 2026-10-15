@@ -41,6 +41,75 @@ def test_inserting_existing_geohash_does_not_duplicate_it():
     assert len(trie.search_prefix("6gyf4bf")) == 1
 
 
+def test_remove_geohash_and_preserve_its_siblings():
+    trie = CompactTrie()
+    for geohash in ("6gyf4bf", "6gyf4bc", "6gyc"):
+        trie.insert(geohash)
+
+    trie.remove("6gyf4bc")
+
+    assert trie.search_prefix("6gyf4bc") == []
+    assert len(trie.search_prefix("6gyf4bf")) == 1
+    assert len(trie.search_prefix("6gyc")) == 1
+
+
+def test_remove_geohash_that_is_prefix_of_another():
+    trie = CompactTrie()
+    trie.insert("6gyf")
+    trie.insert("6gyf4bf")
+
+    trie.remove("6gyf")
+
+    assert len(trie.search_prefix("6gyf")) == 1
+    assert len(trie.search_prefix("6gyf4bf")) == 1
+    assert trie._root.children["6"].prefix == "6gyf4bf"
+    assert set(trie._root.children["6"].children) == {_END}
+
+
+def test_remove_compacts_path_with_only_one_remaining_child():
+    trie = CompactTrie()
+    trie.insert("6gyf4bf")
+    trie.insert("6gyf4bc")
+
+    trie.remove("6gyf4bc")
+
+    remaining_node = trie._root.children["6"]
+    assert remaining_node.prefix == "6gyf4bf"
+    assert set(remaining_node.children) == {_END}
+
+
+def test_remove_only_geohash_leaves_empty_trie():
+    trie = CompactTrie()
+    trie.insert("6gyf")
+
+    trie.remove("6gyf")
+
+    assert trie._root.children == {}
+    assert trie.search_prefix("6gyf") == []
+
+
+def test_remove_empty_key():
+    trie = CompactTrie()
+    trie.insert("")
+    trie.insert("6gyf")
+
+    trie.remove("")
+
+    assert _END not in trie._root.children
+    assert len(trie.search_prefix("6gyf")) == 1
+
+
+def test_remove_missing_geohash_raises_key_error_without_changing_trie():
+    trie = CompactTrie()
+    trie.insert("6gyf4bf")
+
+    with pytest.raises(KeyError) as error:
+        trie.remove("6gyf4bc")
+
+    assert error.value.args == ("6gyf4bc",)
+    assert len(trie.search_prefix("6gyf4bf")) == 1
+
+
 def test_every_geohash_ends_with_end_marker():
     trie = CompactTrie()
     trie.insert("6gyf")

@@ -26,8 +26,8 @@ class Node:
 class CompactTrie:
     """Conjunto de strings implementado como uma trie compacta.
 
-    ``insert`` e ``search_prefix`` explicitam as operações principais da estrutura.
-    Chaves vazias são aceitas.
+    ``insert``, ``remove`` e ``search_prefix`` explicitam as operações principais
+    da estrutura. Chaves vazias são aceitas.
     Toda chave armazenada termina em um filho especial ``_END``.
     """
 
@@ -76,6 +76,43 @@ class CompactTrie:
             branch.children[new_suffix[0]] = self._terminal_node(new_suffix)
         else:
             branch.children[_END] = Node("")
+
+    def remove(self, key: str) -> None:
+        """Remove ``key`` e compacta os caminhos unitários resultantes.
+
+        Levanta ``KeyError`` se a chave não estiver armazenada.
+        Complexidade de tempo: O(m), em que m é o tamanho de ``key``.
+        """
+        self._validate_key(key)
+        try:
+            self._remove_suffix(self._root, key)
+        except KeyError:
+            raise KeyError(key) from None
+
+    def _remove_suffix(self, node: Node, remaining: str) -> None:
+        """Remove a parte restante da chave a partir de ``node``."""
+        if remaining == "":
+            if _END not in node.children:
+                raise KeyError(remaining)
+            del node.children[_END]
+            return
+
+        edge = remaining[0]
+        child = node.children.get(edge)
+        if child is None or not remaining.startswith(child.prefix):
+            raise KeyError(remaining)
+
+        suffix = remaining[len(child.prefix) :]
+        self._remove_suffix(child, suffix)
+
+        if not child.children:
+            del node.children[edge]
+            return
+
+        if len(child.children) == 1 and _END not in child.children:
+            only_child = next(iter(child.children.values()))
+            child.prefix += only_child.prefix
+            child.children = only_child.children
 
     def search_prefix(self, prefix: str) -> list[Node]:
         """Retorna os nós terminais das chaves que começam com ``prefix``.
