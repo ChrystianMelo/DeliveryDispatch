@@ -4,6 +4,8 @@ from math import isfinite
 
 BASE32 = "0123456789bcdefghjkmnpqrstuvwxyz"
 MAX_LEVELS = 8
+LATITUDE_BOUNDS = (-90.0, 90.0)
+LONGITUDE_BOUNDS = (-180.0, 180.0)
 
 
 def encode(latitude: float, longitude: float, levels: int = MAX_LEVELS) -> str:
@@ -25,18 +27,16 @@ def encode(latitude: float, longitude: float, levels: int = MAX_LEVELS) -> str:
 
     if isinstance(latitude, bool) or not isinstance(latitude, (int, float)):
         raise TypeError("latitude deve ser um número")
-    if not -90 <= latitude <= 90 or not isfinite(latitude):
+    if not LATITUDE_BOUNDS[0] <= latitude <= LATITUDE_BOUNDS[1] or not isfinite(latitude):
         raise ValueError("latitude deve ser finita e estar entre -90 e 90")
 
     if isinstance(longitude, bool) or not isinstance(longitude, (int, float)):
         raise TypeError("longitude deve ser um número")
-    if not -180 <= longitude <= 180 or not isfinite(longitude):
+    if not LONGITUDE_BOUNDS[0] <= longitude <= LONGITUDE_BOUNDS[1] or not isfinite(longitude):
         raise ValueError("longitude deve ser finita e estar entre -180 e 180")
 
-    longitude_min = -180.0
-    longitude_max = 180.0
-    latitude_min = -90.0
-    latitude_max = 90.0
+    longitude_min, longitude_max = LONGITUDE_BOUNDS
+    latitude_min, latitude_max = LATITUDE_BOUNDS
     result = ""
     character_value = 0
 
@@ -70,3 +70,52 @@ def encode(latitude: float, longitude: float, levels: int = MAX_LEVELS) -> str:
             character_value = 0
 
     return result
+
+
+def decode(geohash: str) -> tuple[float, float]:
+    """Retorna o centro da célula de um Geohash como ``(latitude, longitude)``.
+
+    Cada caractere é convertido em cinco bits, que refinam alternadamente os
+    intervalos de longitude e latitude. O resultado é o ponto médio dos
+    intervalos finais.
+
+    O Geohash deve ser uma string de 1 a 8 caracteres do alfabeto Base32.
+    Valores de outro tipo causam TypeError; tamanho ou caracteres inválidos
+    causam ValueError.
+    """
+    if not isinstance(geohash, str):
+        raise TypeError("geohash deve ser uma string")
+    if not 1 <= len(geohash) <= MAX_LEVELS:
+        raise ValueError("geohash deve ter entre 1 e 8 caracteres")
+
+    longitude_min, longitude_max = LONGITUDE_BOUNDS
+    latitude_min, latitude_max = LATITUDE_BOUNDS
+    bit_index = 0
+
+    for character in geohash:
+        try:
+            character_value = BASE32.index(character)
+        except ValueError:
+            raise ValueError(f"caractere inválido no geohash: {character!r}") from None
+
+        for shift in range(4, -1, -1):
+            bit = (character_value >> shift) & 1
+
+            if bit_index % 2 == 0:
+                longitude_midpoint = (longitude_min + longitude_max) / 2
+                if bit:
+                    longitude_min = longitude_midpoint
+                else:
+                    longitude_max = longitude_midpoint
+            else:
+                latitude_midpoint = (latitude_min + latitude_max) / 2
+                if bit:
+                    latitude_min = latitude_midpoint
+                else:
+                    latitude_max = latitude_midpoint
+
+            bit_index += 1
+
+    latitude = (latitude_min + latitude_max) / 2
+    longitude = (longitude_min + longitude_max) / 2
+    return latitude, longitude
