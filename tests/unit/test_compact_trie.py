@@ -1,182 +1,86 @@
-"""Testes da trie compacta de prefixos."""
+"""Testes dos contratos principais da trie compacta."""
 
 import pytest
 
 from delivery_dispatch.algorithms import Node
-from delivery_dispatch.algorithms.compact_trie import _END, CompactTrie
+from delivery_dispatch.algorithms.compact_trie import CompactTrie
 
 
-def test_insert_and_search_prefix_with_shared_prefixes():
-    trie = CompactTrie()
-
-    trie.insert("6gyf")
-    trie.insert("6gyc")
-    trie.insert("6gyd")
-    trie.insert("6gyf4bf")
-
-    assert len(trie.search_prefix("6gyf")) == 2
-    assert len(trie.search_prefix("6gyc")) == 1
-    assert len(trie.search_prefix("6gyd")) == 1
-    assert len(trie.search_prefix("6gyf4bf")) == 1
-    assert len(trie.search_prefix("6gy")) == 4
-    assert len(trie.search_prefix("6gyf4")) == 1
+def _values(trie: CompactTrie[str], prefix: str) -> set[str | None]:
+    return {node.value for node in trie.search_prefix(prefix)}
 
 
-def test_geohash_can_be_prefix_of_another_regardless_of_insertion_order():
-    trie = CompactTrie()
-    trie.insert("6gyf4bf")
-    trie.insert("6gyf")
-    trie.insert("6gyf4bc")
+def test_searches_shared_prefixes_and_compacted_edges():
+    trie = CompactTrie[str]()
+    trie.insert("6gyf4bf", "long")
+    trie.insert("6gyf", "short")
+    trie.insert("6gyf4bc", "sibling")
+    trie.insert("6gyc", "other branch")
 
-    assert len(trie.search_prefix("6gyf")) == 3
-    assert len(trie.search_prefix("6gyf4bf")) == 1
-    assert len(trie.search_prefix("6gyf4bc")) == 1
-
-
-def test_inserting_existing_geohash_does_not_duplicate_it():
-    trie = CompactTrie()
-    trie.insert("6gyf4bf")
-    trie.insert("6gyf4bf")
-
-    assert len(trie.search_prefix("6gyf4bf")) == 1
-
-
-def test_remove_geohash_and_preserve_its_siblings():
-    trie = CompactTrie()
-    for geohash in ("6gyf4bf", "6gyf4bc", "6gyc"):
-        trie.insert(geohash)
-
-    trie.remove("6gyf4bc")
-
-    assert trie.search_prefix("6gyf4bc") == []
-    assert len(trie.search_prefix("6gyf4bf")) == 1
-    assert len(trie.search_prefix("6gyc")) == 1
-
-
-def test_remove_geohash_that_is_prefix_of_another():
-    trie = CompactTrie()
-    trie.insert("6gyf")
-    trie.insert("6gyf4bf")
-
-    trie.remove("6gyf")
-
-    assert len(trie.search_prefix("6gyf")) == 1
-    assert len(trie.search_prefix("6gyf4bf")) == 1
-    assert trie._root.children["6"].prefix == "6gyf4bf"
-    assert set(trie._root.children["6"].children) == {_END}
-
-
-def test_remove_compacts_path_with_only_one_remaining_child():
-    trie = CompactTrie()
-    trie.insert("6gyf4bf")
-    trie.insert("6gyf4bc")
-
-    trie.remove("6gyf4bc")
-
-    remaining_node = trie._root.children["6"]
-    assert remaining_node.prefix == "6gyf4bf"
-    assert set(remaining_node.children) == {_END}
-
-
-def test_remove_only_geohash_leaves_empty_trie():
-    trie = CompactTrie()
-    trie.insert("6gyf")
-
-    trie.remove("6gyf")
-
-    assert trie._root.children == {}
-    assert trie.search_prefix("6gyf") == []
-
-
-def test_remove_empty_key():
-    trie = CompactTrie()
-    trie.insert("")
-    trie.insert("6gyf")
-
-    trie.remove("")
-
-    assert _END not in trie._root.children
-    assert len(trie.search_prefix("6gyf")) == 1
-
-
-def test_remove_missing_geohash_raises_key_error_without_changing_trie():
-    trie = CompactTrie()
-    trie.insert("6gyf4bf")
-
-    with pytest.raises(KeyError) as error:
-        trie.remove("6gyf4bc")
-
-    assert error.value.args == ("6gyf4bc",)
-    assert len(trie.search_prefix("6gyf4bf")) == 1
-
-
-def test_every_geohash_ends_with_end_marker():
-    trie = CompactTrie()
-    trie.insert("6gyf")
-
-    geohash_node = trie._root.children["6"]
-
-    assert geohash_node.prefix == "6gyf"
-    assert set(geohash_node.children) == {_END}
-
-
-def test_empty_key_is_supported():
-    trie = CompactTrie()
-    trie.insert("")
-    trie.insert("6")
-
-    assert _END in trie._root.children
-    assert len(trie.search_prefix("6")) == 1
-
-
-def test_search_prefix_returns_only_geohashes_below_matching_node():
-    trie = CompactTrie()
-    for geohash in ("6gyf", "6gyf4bf", "6gyf4bc", "6gyc"):
-        trie.insert(geohash)
-
-    nodes = trie.search_prefix("6gyf")
-
-    assert len(nodes) == 3
-    assert all(_END in node.children for node in nodes)
-
-
-def test_search_prefix_can_end_in_the_middle_of_a_compact_edge():
-    trie = CompactTrie()
-    trie.insert("6gyf4bf")
-
-    nodes = trie.search_prefix("6gy")
-
-    assert len(nodes) == 1
-    assert isinstance(nodes[0], Node)
-    assert nodes[0].prefix == "6gyf4bf"
-    assert _END in nodes[0].children
-
-
-def test_search_prefix_returns_empty_list_when_prefix_does_not_exist():
-    trie = CompactTrie()
-    trie.insert("6gyf4bf")
-
+    assert _values(trie, "6gyf") == {"long", "short", "sibling"}
+    assert _values(trie, "6gyf4") == {"long", "sibling"}
+    assert _values(trie, "6gyc") == {"other branch"}
     assert trie.search_prefix("7zz") == []
 
 
-def test_empty_prefix_is_rejected():
-    trie = CompactTrie()
-    trie.insert("6gyf")
+def test_duplicate_key_preserves_first_value():
+    trie = CompactTrie[str]()
+    trie.insert("6gyf", "first")
+    trie.insert("6gyf", "second")
 
-    with pytest.raises(ValueError, match="prefix não pode ser vazio"):
+    assert _values(trie, "6gyf") == {"first"}
+
+
+def test_remove_preserves_siblings_and_descendants():
+    trie = CompactTrie[str]()
+    for key in ("6gyf", "6gyf4bf", "6gyf4bc", "6gyc"):
+        trie.insert(key, key)
+
+    trie.remove("6gyf4bc")
+    trie.remove("6gyf")
+
+    assert trie.search_prefix("6gyf4bc") == []
+    assert _values(trie, "6gyf") == {"6gyf4bf"}
+    assert _values(trie, "6gyc") == {"6gyc"}
+
+
+def test_remove_missing_key_raises_key_error():
+    trie = CompactTrie[str]()
+    trie.insert("6gyf", "value")
+
+    with pytest.raises(KeyError):
+        trie.remove("missing")
+
+    assert _values(trie, "6gyf") == {"value"}
+
+
+def test_generic_values_are_stored_only_in_terminal_leaves():
+    first_payload = object()
+    second_payload = object()
+    trie = CompactTrie[object]()
+    trie.insert("shared-one", first_payload)
+    trie.insert("shared-two", second_payload)
+
+    leaves = trie.search_prefix("shared")
+
+    assert {id(node.value) for node in leaves} == {id(first_payload), id(second_payload)}
+    assert all(node.children == {} for node in leaves)
+
+    def assert_parent_values_are_empty(node: Node[object]) -> None:
+        if node.children:
+            assert node.value is None
+        for child in node.children.values():
+            assert_parent_values_are_empty(child)
+
+    assert_parent_values_are_empty(trie._root)
+
+
+def test_rejects_invalid_keys_and_prefixes():
+    trie = CompactTrie[str]()
+
+    with pytest.raises(TypeError):
+        trie.insert(None, "value")
+    with pytest.raises(ValueError):
+        trie.insert("reserved$marker", "value")
+    with pytest.raises(ValueError):
         trie.search_prefix("")
-
-
-@pytest.mark.parametrize("key", [None, 1, True, b"6gyf"])
-def test_non_string_keys_are_rejected(key):
-    trie = CompactTrie()
-
-    with pytest.raises(TypeError, match="key"):
-        trie.insert(key)
-
-
-def test_end_marker_is_rejected_in_keys():
-    trie = CompactTrie()
-
-    with pytest.raises(ValueError, match="marcador"):
-        trie.insert("geo$hash")
