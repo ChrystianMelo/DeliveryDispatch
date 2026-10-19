@@ -2,13 +2,325 @@
 
 \usepackage[T1]{fontenc}
 \usepackage[utf8]{inputenc}
-\usepackage[brazil]{babel}
+\usepackage[brazilian]{babel}
+\usepackage{amsmath}
+\usepackage{booktabs}
+\usepackage{geometry}
+\usepackage{graphicx}
+\usepackage{tabularx}
+\usepackage{xcolor}
+\usepackage[hidelinks]{hyperref}
 
-\title{DeliveryDispatch\\TP1 — Indexação Geoespacial e Geometria Computacional Híbrida}
+\geometry{margin=2.5cm}
+\setlength{\parindent}{1.25cm}
+\setlength{\parskip}{0.2em}
+
+\title{DeliveryDispatch\\
+\large Motor Híbrido de Busca e Monitoramento Geoespacial\\
+\large Relatório do Trabalho Prático 1 --- DCC207}
+% Preencher com todos os integrantes confirmados antes da entrega.
 \author{}
-\date{}
+\date{Outubro de 2026}
 
 \begin{document}
+
 \maketitle
 \thispagestyle{empty}
+
+\begin{abstract}
+Este relatório descreve o desenvolvimento do DeliveryDispatch, uma solução para
+indexar restaurantes e uma frota sintética de entregadores em Belo Horizonte. A
+abordagem combina codificação Geohash, uma Trie compacta implementada no projeto,
+geração de posições por distribuição normal e projeção dos pontos sobre a malha
+viária do OpenStreetMap. Além das decisões algorítmicas, são apresentados o fluxo
+de preparação dos dados e a estratégia de testes.
+\end{abstract}
+
+\tableofcontents
+\clearpage
+
+\section{Introdução}
+
+O problema proposto consiste em construir um motor de busca e monitoramento
+geoespacial para uma frota de entregadores em operação na cidade de Belo
+Horizonte. A partir de um restaurante selecionado, o sistema deve localizar
+rapidamente os entregadores candidatos, eliminar aqueles fora de um raio de
+atendimento e apresentar os resultados em um mapa interativo, acompanhados de
+distâncias e estimativas de tempo de chegada \cite{enunciado}.
+
+Uma busca exata sobre toda a frota teria custo proporcional ao número total de
+entregadores em cada consulta. Para reduzir esse espaço, a solução associa cada
+posição a uma célula Geohash e usa prefixos dessas células como chaves de uma
+Trie compacta. A seleção por prefixo fornece um conjunto candidato; em seguida,
+uma etapa geométrica deve tratar células adjacentes e verificar a distância real
+até o restaurante. Essa combinação busca conciliar velocidade de indexação com
+precisão espacial.
+
+O desenvolvimento ocorre no contexto do Trabalho Prático 1 da disciplina
+DCC207 --- Algoritmos 2. Este documento concentra a descrição técnica e as
+decisões de projeto, enquanto o README do repositório permanece voltado à
+instalação e à execução.
+
+\section{Arquitetura e fluxo de dados}
+
+A implementação foi dividida em algoritmos, modelos, acesso a dados e serviços.
+O fluxo principal pode ser resumido nas etapas a seguir:
+
+\begin{enumerate}
+    \item leitura da base fornecida de bares e restaurantes;
+    \item geocodificação dos endereços ainda pendentes;
+    \item persistência do CSV enriquecido e construção dos objetos de domínio;
+    \item geração de $N$ posições sintéticas ao redor dos estabelecimentos;
+    \item projeção dessas posições para ruas transitáveis;
+    \item codificação das coordenadas em Geohash;
+    \item inserção de entregadores, nomes e endereços em Tries compactas.
+\end{enumerate}
+
+A Tabela~\ref{tab:modules} relaciona as principais responsabilidades aos módulos
+que as implementam.
+
+\begin{table}[htbp]
+\centering
+\small
+\caption{Organização dos componentes principais.}
+\label{tab:modules}
+\begin{tabularx}{\textwidth}{@{}p{0.41\textwidth}X@{}}
+\toprule
+Módulo & Responsabilidade \\
+\midrule
+\path{algorithms/geohash.py} &
+Codificação e decodificação Geohash \\
+\path{algorithms/compact_trie.py} &
+Trie compacta genérica e busca por prefixo \\
+\path{data/bar_loader.py} &
+Leitura, validação, retomada e persistência do CSV \\
+\path{services/geocoding.py} &
+Cliente sequencial do Nominatim com cache local \\
+\path{services/courier_generation.py} &
+Distribuição espacial e construção dos entregadores \\
+\path{services/road_network.py} &
+Carga da malha viária e projeção dos pontos \\
+\path{main.py} &
+Orquestração do fluxo e construção dos índices \\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+Os modelos \texttt{Bar} e \texttt{Courier} são dataclasses imutáveis. Essa
+decisão torna explícito quando um registro é substituído após a geocodificação e
+evita alterações acidentais enquanto o mesmo objeto é referenciado pelos índices.
+
+\section{Preparação da base geográfica}
+
+\subsection{Leitura e persistência}
+
+O carregador valida a presença das colunas obrigatórias e converte cada linha em
+um objeto \texttt{Bar}. O CSV processado acrescenta latitude, longitude e
+\texttt{GEOCODING\_STATUS}; o Geohash é calculado em memória ao carregar o
+registro e, portanto, não é duplicado no arquivo.
+
+A persistência usa um arquivo temporário, posteriormente movido sobre o destino.
+Esse procedimento reduz o risco de deixar um CSV parcialmente escrito em caso de
+interrupção. Durante uma execução de geocodificação, também são salvos
+\emph{checkpoints} a cada 100 consultas. Registros com estado
+\texttt{found} ou \texttt{not\_found} não são consultados novamente, permitindo
+retomar o processamento dos itens ainda marcados como \texttt{pending}.
+
+\subsection{Geocodificação e cache}
+
+O cliente Nominatim envia as requisições sequencialmente, identifica a aplicação
+por \emph{User-Agent}, limita a frequência a uma requisição por segundo e
+mantém um cache JSON local. Essas medidas reduzem consultas repetidas e seguem
+as principais restrições do serviço público \cite{nominatim-policy}. O cache não
+é versionado.
+
+Ao término do processamento, a base apresentou a distribuição
+da Tabela~\ref{tab:geocoding}.
+
+\begin{table}[htbp]
+\centering
+\caption{Resultado da preparação da base fornecida.}
+\label{tab:geocoding}
+\begin{tabular}{@{}lrr@{}}
+\toprule
+Estado & Registros & Proporção \\
+\midrule
+Encontrados (\texttt{found}) & 19\,238 & 92,23\% \\
+Não encontrados (\texttt{not\_found}) & 1\,621 & 7,77\% \\
+Pendentes (\texttt{pending}) & 0 & 0,00\% \\
+\midrule
+Total & 20\,859 & 100,00\% \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\section{Algoritmos e decisões de projeto}
+
+\subsection{Codificação Geohash}
+
+A implementação inicia com os intervalos $[-180,180]$ para longitude e
+$[-90,90]$ para latitude. Cada bit divide um dos intervalos ao meio. Os bits de
+índice par refinam a longitude e os de índice ímpar refinam a latitude, portanto
+a intercalação começa pela longitude. A cada cinco decisões binárias, o valor
+obtido seleciona um caractere do alfabeto Base32 do Geohash.
+
+Para uma precisão de $p$ caracteres, são realizadas $5p$ subdivisões. Assim, o
+tempo e o espaço da codificação são $O(p)$; neste projeto, $1 \leq p \leq 8$.
+A decodificação percorre o caminho inverso e retorna o centro da célula
+representada. Como referência de escala, no equador uma célula com oito
+caracteres mede aproximadamente $38{,}2\,\mathrm{m} \times 19\,\mathrm{m}$,
+com dimensões que variam conforme a latitude \cite{elastic-geohash-grid}.
+
+Geohash fornece uma aproximação espacial, não uma distância métrica. Além disso,
+pontos próximos podem cair em células diferentes quando estão em lados opostos
+de uma borda.
+
+\subsection{Trie compacta}
+
+A Trie foi implementada no próprio projeto, sem bibliotecas prontas para a
+estrutura central. Cada nó guarda o trecho completo da aresta que o conecta ao
+pai, em vez de armazenar apenas um caractere. Os filhos ficam em um dicionário
+indexado pelo primeiro caractere da aresta. Uma folha especial identificada por
+\texttt{\$} marca o fim da chave e armazena um valor genérico.
+
+Na inserção, há três casos principais: criação de uma nova aresta, continuação
+por uma aresta totalmente compatível ou divisão da aresta no maior prefixo
+comum. A remoção executa o processo inverso e volta a unir caminhos que ficam
+com um único filho não terminal. Esse mecanismo reduz cadeias de nós sem
+bifurcação.
+
+A busca consome o prefixo ao longo das arestas compactadas e, depois da
+correspondência, coleta as folhas da subárvore. Considerando acesso médio
+constante ao dicionário de filhos, a navegação custa $O(m)$ e a materialização
+dos resultados custa o número de nós visitados. No contrato esperado, isso é
+expresso como $O(m+k)$, em que $m$ é o tamanho do prefixo e $k$ representa o
+volume retornado.
+
+\subsection{Índices de nome e endereço}
+
+Nomes e endereços de restaurantes são normalizados com conversão para caixa
+minúscula, decomposição Unicode, remoção de acentos e redução de sequências de
+espaços. Duas Tries separadas recebem esses textos e os respectivos objetos
+\texttt{Bar}, preparando a busca tanto por nome quanto por endereço.
+
+\section{Busca geoespacial e filtragem}
+
+\section{Geração sintética de entregadores}
+
+A frota é gerada somente a partir dos estabelecimentos que possuem coordenadas.
+Depois de uma embaralhação reproduzível dos centros, os $N$ entregadores são
+atribuídos em rodízio aos restaurantes. Dessa forma, a diferença entre as
+quantidades associadas a quaisquer dois centros utilizados é de, no máximo, uma
+unidade.
+
+Para cada entregador, são sorteados dois deslocamentos independentes,
+$X,Y \sim \mathcal{N}(0,\sigma^2)$, com $\sigma=500\,\mathrm{m}$. Os
+deslocamentos são convertidos aproximadamente de metros para graus por
+
+\begin{align}
+\Delta\varphi &=
+    \frac{X}{111\,320}, \\
+\Delta\lambda &=
+    \frac{Y}{111\,320\max\left(|\cos\varphi|,10^{-12}\right)},
+\end{align}
+
+em que $\varphi$ é a latitude do restaurante. A correção pelo cosseno compensa
+a variação do comprimento de um grau de longitude. A semente padrão é 42, o que
+permite repetir os mesmos sorteios em testes e experimentos.
+
+A geração matemática tem custo $O(N)$, desconsiderando a projeção viária. Após
+essa projeção, cada entregador recebe um identificador sequencial, as
+coordenadas corrigidas, o identificador do restaurante usado como centro e seu
+Geohash.
+
+\section{Correção para a malha viária}
+
+Pontos produzidos por uma distribuição contínua podem cair dentro de edifícios,
+quadras ou corpos d'água. Para aproximar posições válidas de circulação, o
+serviço viário usa o OSMnx e dados do OpenStreetMap
+\cite{osmnx-docs,osm-copyright}.
+
+Na primeira execução, é obtido o grafo simplificado da rede de automóveis de
+Belo Horizonte (\texttt{network\_type=drive}). O grafo é projetado para um
+sistema de coordenadas adequado a operações métricas e salvo em GraphML. Nas
+execuções seguintes, esse arquivo é reutilizado.
+
+As coordenadas sintéticas, inicialmente em EPSG:4326, são convertidas para o
+mesmo sistema do grafo. O OSMnx encontra a aresta mais próxima de cada ponto.
+Em seguida, a biblioteca geométrica interpola a posição sobre essa aresta e o
+resultado retorna a EPSG:4326. Quando uma aresta não possui geometria explícita,
+o segmento entre seus nós inicial e final é usado como aproximação.
+
+Os dados cartográficos são disponibilizados pelo OpenStreetMap sob a licença
+ODbL e requerem atribuição ao projeto e a seus colaboradores
+\cite{osm-copyright}.
+
+\section{Interface interativa}
+
+\section{Testes e garantia de qualidade}
+
+Os testes automatizados verificam os contratos das partes isoladas e da
+orquestração. Entre os cenários cobertos estão:
+
+\begin{itemize}
+    \item valores conhecidos e entradas inválidas na codificação Geohash;
+    \item inserção, divisão de arestas, busca, remoção e valores da Trie;
+    \item leitura, persistência e retomada do CSV processado;
+    \item consulta e reaproveitamento do cache de geocodificação sem rede real;
+    \item equilíbrio e reprodutibilidade da geração de entregadores;
+    \item projeção sobre uma aresta de um grafo sintético;
+    \item integração do fluxo principal por meio de substitutos controlados.
+\end{itemize}
+
+Protocolos para o geocodificador e o projetor viário permitem usar implementações
+falsas nos testes, mantendo a lógica de domínio independente da rede. A
+integração contínua executa análise estática, verificação de formatação, testes e
+construção do pacote com Python 3.12 em Linux e Windows.
+
+\section{Avaliação experimental}
+
+\section{Conclusão}
+
+O DeliveryDispatch estabelece a base de dados e os principais componentes
+algorítmicos da solução. A codificação Geohash e a Trie compacta foram
+implementadas diretamente, enquanto bibliotecas geoespaciais foram reservadas
+para geocodificação, sistemas de coordenadas e malha viária. A geração sintética
+reproduzível e a projeção sobre ruas completam a infraestrutura necessária para
+produzir uma frota plausível.
+
+\begin{thebibliography}{9}
+
+\bibitem{enunciado}
+Vimieiro, Renato.
+\emph{Trabalho Prático 1 --- Indexação Geoespacial e Geometria Computacional Híbrida}.
+DCC207 --- Algoritmos 2, Universidade Federal de Minas Gerais, 2026.
+
+\bibitem{elastic-geohash-grid}
+Elastic.
+\emph{Geohash grid aggregation: cell dimensions at the equator}.
+Disponível em:
+\url{https://www.elastic.co/docs/reference/aggregations/search-aggregations-bucket-geohashgrid-aggregation}.
+Acesso em: 19 out. 2026.
+
+\bibitem{osmnx-docs}
+OSMnx.
+\emph{OSMnx documentation}.
+Disponível em: \url{https://osmnx.readthedocs.io/}.
+Acesso em: 19 out. 2026.
+
+\bibitem{nominatim-policy}
+OpenStreetMap Foundation.
+\emph{Nominatim Usage Policy}.
+Disponível em:
+\url{https://operations.osmfoundation.org/policies/nominatim/}.
+Acesso em: 19 out. 2026.
+
+\bibitem{osm-copyright}
+OpenStreetMap.
+\emph{Copyright and License}.
+Disponível em: \url{https://www.openstreetmap.org/copyright}.
+Acesso em: 19 out. 2026.
+
+\end{thebibliography}
+
 \end{document}

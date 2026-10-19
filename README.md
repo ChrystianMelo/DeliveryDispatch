@@ -1,56 +1,101 @@
 # DeliveryDispatch
 
-Projeto em desenvolvimento para o TP1 de Algoritmos 2. O objetivo é implementar a busca geoespacial de entregadores próximos a restaurantes, utilizando Geohash, Trie compacta e filtragem por raio de atendimento.
+Encontrar entregadores próximos a um restaurante com baixa latência exige organizar posições
+geográficas e reduzir o espaço de busca sem perder precisão. O DeliveryDispatch está sendo
+construído para explorar esse problema em Belo Horizonte, combinando Geohash, Trie compacta,
+simulação espacial e geometria viária.
 
-## Estrutura
+Além de avançar a solução, o desenvolvimento exercita estruturas de dados, algoritmos
+geoespaciais, integração com serviços externos e testes automatizados.
 
-- `src/delivery_dispatch/`: código do projeto, com pastas para modelos, algoritmos, serviços, dados e interface.
-- `tests/`: testes unitários, de integração e dados de teste.
-- `scripts/`: comandos de configuração, execução e verificação.
-- `data/`: dados originais, dados processados e cache.
-- `experiments/`: cenários e resultados de avaliação de desempenho.
-- `docs/`: fonte LaTeX do relatório e figuras.
+## Visão geral
 
-## Preparação e execução
+O fluxo implementado atualmente:
 
-Requer Python 3.12 ou superior. Execute os comandos a partir da raiz do repositório.
+- prepara e geocodifica uma base de bares e restaurantes;
+- gera uma frota sintética distribuída ao redor desses estabelecimentos;
+- ajusta as posições dos entregadores à malha viária do OpenStreetMap;
+- converte coordenadas em Geohashes;
+- organiza estabelecimentos e entregadores em índices baseados em Trie compacta.
 
-No Windows (PowerShell), use os scripts para preparar o ambiente, executar o programa e rodar os testes:
+A busca em células vizinhas, a filtragem final por raio e a interface interativa ainda serão
+integradas.
+
+## Requisitos
+
+- Python 3.12 ou superior;
+- conexão com a internet caso a base processada ou a malha viária ainda não estejam
+  disponíveis localmente.
+
+## Instalação e execução
+
+No Windows, execute os comandos a partir da raiz do repositório:
 
 ```powershell
 .\scripts\config.bat
-.\scripts\run.bat
-.\scripts\run_tests.bat
+.\scripts\run.bat 100
 ```
 
-- `config.bat`: cria o ambiente virtual `.venv`, se necessário, e instala o projeto e as ferramentas de desenvolvimento. Execute antes do primeiro uso.
-- `run.bat`: executa o programa usando a `.venv`, quando disponível.
-- `run_tests.bat`: executa os testes com pytest, usando a `.venv`, quando disponível.
+O argumento `100` define a quantidade de entregadores simulados. Use `0` para executar
+somente a preparação dos dados.
 
-Os scripts usam o ambiente virtual automaticamente, sem precisar ativá-lo manualmente.
+Para consultar as demais opções:
+
+```powershell
+.\scripts\run.bat --help
+```
 
 <details>
-<summary>Instruções alternativas para Linux e macOS</summary>
-
-No Linux ou macOS, os arquivos `.bat` não são executáveis. Prepare o ambiente uma vez e use o `tasks.py` para as demais operações:
+<summary>Linux e macOS</summary>
 
 ```bash
 python -m venv .venv
 source .venv/bin/activate
 python scripts/tasks.py setup
-python scripts/tasks.py run
-python scripts/tasks.py test
-python scripts/tasks.py build
+python scripts/tasks.py run 100
 ```
 
 </details>
 
-## CI e relatório
+## Dados e cache
 
-O CI executa as verificações e o build com Python 3.12 no Linux e no Windows em pushes e pull requests.
+A base enriquecida com coordenadas fica em
+`data/processed/bares_geocodificados.csv`. Respostas de geocodificação e a malha viária são
+armazenadas em `data/cache/` para evitar consultas e downloads repetidos.
 
-O relatório será escrito em [docs/report.tex](docs/report.tex), que atualmente contém apenas o título. Um workflow separado compila o PDF quando `docs/` é alterada ou por execução manual. Na branch principal, o PDF é publicado e atualizado na Release `report`.
+A opção `--rebuild-processed` recria a base processada. Essa operação pode exigir milhares de
+consultas e deve respeitar a
+[política de uso do Nominatim](https://operations.osmfoundation.org/policies/nominatim/).
 
-[Baixar relatório em PDF](https://github.com/ChrystianMelo/DeliveryDispatch/releases/download/report/report.pdf)
+Os dados geográficos utilizados são fornecidos por
+[OpenStreetMap](https://www.openstreetmap.org/copyright) contributors.
 
-O link ficará disponível após a primeira publicação bem-sucedida. Em repositórios privados, o acesso exige permissão no repositório.
+## Testes
+
+No Windows:
+
+```powershell
+.\scripts\run_tests.bat
+```
+
+Em outros ambientes:
+
+```bash
+python scripts/tasks.py test
+```
+
+## Estrutura
+
+- `src/delivery_dispatch/`: implementação da aplicação;
+- `data/`: bases original, processada e caches locais;
+- `tests/`: testes automatizados;
+- `experiments/`: cenários e resultados experimentais;
+- `docs/`: relatório e documentação.
+
+## Relatório
+
+A descrição completa do problema, as decisões de implementação, a análise dos algoritmos e
+os resultados experimentais ficam concentrados no relatório:
+
+- [Fonte em LaTeX](docs/report.tex)
+- [Baixar relatório em PDF](https://github.com/ChrystianMelo/DeliveryDispatch/releases/download/report/report.pdf)
