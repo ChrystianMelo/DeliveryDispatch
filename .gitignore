@@ -13,11 +13,9 @@ docs/**/*.fls
 docs/**/*.fdb_latexmk
 docs/**/*.synctex.gz
 
-# Generated datasets, downloaded maps, and experiment outputs
+# Cached data, downloaded maps, and experiment outputs
 data/cache/*
 !data/cache/.gitkeep
-data/processed/*
-!data/processed/.gitkeep
 experiments/results/*
 !experiments/results/.gitkeep
 
