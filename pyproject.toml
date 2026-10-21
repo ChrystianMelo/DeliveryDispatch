@@ -8,7 +8,12 @@ version = "0.1.0"
 description = "Geospatial courier search and simulation for TP1."
 readme = "README.md"
 requires-python = ">=3.12"
-dependencies = ["osmnx>=2.1,<3", "scipy>=1.13"]
+dependencies = [
+    "dash>=2.18,<5",
+    "osmnx>=2.1,<3",
+    "plotly>=5.24,<7",
+    "scipy>=1.13",
+]
 
 [project.optional-dependencies]
 dev = ["build", "pytest", "ruff"]
@@ -17,6 +22,9 @@ dev = ["build", "pytest", "ruff"]
 where = ["src"]
 include = ["delivery_dispatch*"]
 namespaces = false
+
+[tool.setuptools.package-data]
+delivery_dispatch = ["assets/*.css"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

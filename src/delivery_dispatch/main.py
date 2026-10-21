@@ -1,20 +1,17 @@
-"""Ponto de entrada do fluxo inicial do DeliveryDispatch."""
+"""Prepara os dados e inicia a interface web do DeliveryDispatch."""
 
 import argparse
 import logging
+import os
 import sys
-import unicodedata
 from collections.abc import Sequence
 from io import TextIOBase
 from pathlib import Path
 
-from delivery_dispatch.algorithms.compact_trie import CompactTrie
+from delivery_dispatch import dashboard
 from delivery_dispatch.data.bar_loader import load_bars, prepare_bars_csv
-from delivery_dispatch.models.bar import Bar
-from delivery_dispatch.models.courier import Courier
-from delivery_dispatch.services.courier_generation import generate_couriers
 from delivery_dispatch.services.geocoding import GeocodingError, NominatimGeocoder
-from delivery_dispatch.services.road_network import OSMnxRoadProjector, RoadNetworkError
+from delivery_dispatch.services.road_network import OSMnxRoadProjector
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 DEFAULT_CSV_PATH = PROJECT_ROOT / "data" / "raw" / "bares.csv"
@@ -23,15 +20,6 @@ DEFAULT_CACHE_PATH = PROJECT_ROOT / "data" / "cache" / "bar_geocoding.json"
 DEFAULT_ROAD_GRAPH_PATH = PROJECT_ROOT / "data" / "cache" / "belo_horizonte_drive.graphml"
 DEFAULT_USER_AGENT = "DeliveryDispatch/0.1 (projeto acadêmico)"
 LOGGER = logging.getLogger(__name__)
-
-
-def normalize_text(value: str) -> str:
-    """Normaliza texto para indexação sem distinguir caixa, acentos ou espaços."""
-    decomposed = unicodedata.normalize("NFKD", value.casefold())
-    without_accents = "".join(
-        character for character in decomposed if not unicodedata.combining(character)
-    )
-    return " ".join(without_accents.split())
 
 
 class _CurrentStdout(TextIOBase):
@@ -54,11 +42,11 @@ def _configure_logging() -> None:
     LOGGER.propagate = False
 
 
-def _non_negative_integer(value: str) -> int:
-    number = int(value)
-    if number < 0:
-        raise argparse.ArgumentTypeError("o número de entregadores não pode ser negativo")
-    return number
+def _port_number(value: str) -> int:
+    port = int(value)
+    if not 1 <= port <= 65_535:
+        raise argparse.ArgumentTypeError("a porta deve estar entre 1 e 65535")
+    return port
 
 
 class ProgressBar:
@@ -91,11 +79,6 @@ class ProgressBar:
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
-        "couriers",
-        type=_non_negative_integer,
-        help="quantidade de entregadores a simular",
-    )
-    parser.add_argument(
         "--csv",
         type=Path,
         default=DEFAULT_CSV_PATH,
@@ -111,6 +94,22 @@ def build_parser() -> argparse.ArgumentParser:
         "--rebuild-processed",
         action="store_true",
         help="recria o CSV processado a partir da base original",
+    )
+    parser.add_argument(
+        "--host",
+        default=os.environ.get("DELIVERY_DISPATCH_HOST", "127.0.0.1"),
+        help="endereço da interface web (padrão: 127.0.0.1)",
+    )
+    parser.add_argument(
+        "--port",
+        type=_port_number,
+        default=os.environ.get("DELIVERY_DISPATCH_PORT", "8050"),
+        help="porta da interface web (padrão: 8050)",
+    )
+    parser.add_argument(
+        "--debug",
+        action="store_true",
+        help="ativa o modo de desenvolvimento do Dash",
     )
     return parser
 
@@ -159,31 +158,11 @@ def main(argv: Sequence[str] | None = None) -> int:
             progress.finish()
             LOGGER.info("Nenhum endereço pendente")
 
-        located_bars = [bar for bar in bars if bar.coordinates is not None]
-        if args.couriers:
-            LOGGER.info(
-                "Posicionando %d entregadores na malha viária (%s)",
-                args.couriers,
-                ("usando mapa salvo" if DEFAULT_ROAD_GRAPH_PATH.exists() else "baixando mapa"),
-            )
-            road_projector = OSMnxRoadProjector(DEFAULT_ROAD_GRAPH_PATH)
-            couriers = generate_couriers(args.couriers, located_bars, road_projector)
-            courier_tree = CompactTrie[Courier]()
-            for courier in couriers:
-                if courier.geohash is None:
-                    raise ValueError("entregador gerado sem Geohash")
-                courier_tree.insert(courier.geohash, courier)
-
-        bar_name_tree = CompactTrie[Bar]()
-        restaurant_address_tree = CompactTrie[Bar]()
-        for bar in bars:
-            normalized_name = normalize_text(bar.name)
-            normalized_address = normalize_text(bar.address)
-            if normalized_name:
-                bar_name_tree.insert(normalized_name, bar)
-            if normalized_address:
-                restaurant_address_tree.insert(normalized_address, bar)
-    except (OSError, ValueError, GeocodingError, RoadNetworkError) as error:
+        LOGGER.info("Abrindo a interface em http://%s:%d", args.host, args.port)
+        road_projector = OSMnxRoadProjector(DEFAULT_ROAD_GRAPH_PATH)
+        app = dashboard.create_app(bars, road_projector)
+        app.run(host=args.host, port=args.port, debug=args.debug)
+    except (OSError, ValueError, GeocodingError) as error:
         progress.finish()
         LOGGER.error("Execução interrompida: %s", error)
         return 1
