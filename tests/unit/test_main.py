@@ -72,6 +72,10 @@ def test_main_always_opens_dashboard(tmp_path, monkeypatch):
         return FakeApp()
 
     monkeypatch.setattr("delivery_dispatch.dashboard.create_app", fake_create_app)
+    monkeypatch.setattr(
+        "delivery_dispatch.main.webbrowser.open_new_tab",
+        lambda url: calls.setdefault("browser_url", url),
+    )
 
     assert (
         main(
@@ -87,4 +91,5 @@ def test_main_always_opens_dashboard(tmp_path, monkeypatch):
         == 0
     )
     assert len(calls["bars"]) == 1
+    assert calls["browser_url"] == "http://127.0.0.1:9000"
     assert calls["run"] == {"host": "0.0.0.0", "port": 9000, "debug": False}

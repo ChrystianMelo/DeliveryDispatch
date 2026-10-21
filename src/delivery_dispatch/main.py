@@ -4,6 +4,7 @@ import argparse
 import logging
 import os
 import sys
+import webbrowser
 from collections.abc import Sequence
 from io import TextIOBase
 from pathlib import Path
@@ -47,6 +48,20 @@ def _port_number(value: str) -> int:
     if not 1 <= port <= 65_535:
         raise argparse.ArgumentTypeError("a porta deve estar entre 1 e 65535")
     return port
+
+
+def _dashboard_url(host: str, port: int) -> str:
+    """Return the browser-accessible URL for the dashboard server."""
+    browser_host = "127.0.0.1" if host in {"0.0.0.0", "::"} else host
+    return f"http://{browser_host}:{port}"
+
+
+def _open_dashboard_in_browser(url: str) -> None:
+    """Open the local dashboard without preventing the server from starting."""
+    try:
+        webbrowser.open_new_tab(url)
+    except webbrowser.Error as error:
+        LOGGER.warning("Não foi possível abrir o navegador: %s", error)
 
 
 class ProgressBar:
@@ -158,9 +173,11 @@ def main(argv: Sequence[str] | None = None) -> int:
             progress.finish()
             LOGGER.info("Nenhum endereço pendente")
 
-        LOGGER.info("Abrindo a interface em http://%s:%d", args.host, args.port)
+        dashboard_url = _dashboard_url(args.host, args.port)
+        LOGGER.info("Abrindo a interface em %s", dashboard_url)
         road_projector = OSMnxRoadProjector(DEFAULT_ROAD_GRAPH_PATH)
         app = dashboard.create_app(bars, road_projector)
+        _open_dashboard_in_browser(dashboard_url)
         app.run(host=args.host, port=args.port, debug=args.debug)
     except (OSError, ValueError, GeocodingError) as error:
         progress.finish()
