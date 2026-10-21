@@ -16,10 +16,10 @@ O fluxo implementado atualmente:
 - gera uma frota sintética distribuída ao redor desses estabelecimentos;
 - ajusta as posições dos entregadores à malha viária do OpenStreetMap;
 - converte coordenadas em Geohashes;
-- organiza estabelecimentos e entregadores em índices baseados em Trie compacta.
-
-A busca em células vizinhas, a filtragem final por raio e a interface interativa ainda serão
-integradas.
+- organiza estabelecimentos e entregadores em índices baseados em Trie compacta;
+- pré-seleciona entregadores pelas células Geohash do restaurante e suas adjacentes;
+- filtra os candidatos por distância de Haversine e destaca apenas os que estão no raio;
+- oferece um painel interativo para pesquisar restaurantes e gerar a frota simulada.
 
 ## Requisitos
 
@@ -33,11 +33,19 @@ No Windows, execute os comandos a partir da raiz do repositório:
 
 ```powershell
 .\scripts\config.bat
-.\scripts\run.bat 100
+.\scripts\run.bat
 ```
 
-O argumento `100` define a quantidade de entregadores simulados. Use `0` para executar
-somente a preparação dos dados.
+Abra `http://127.0.0.1:8050` no navegador. Na interface, pesquise um restaurante pelo nome
+ou endereço, defina o raio de busca em quilômetros, informe a quantidade `N`
+e selecione **Gerar entregadores**. Cada geração substitui a frota anterior no mapa. Ao selecionar um
+restaurante, os entregadores encontrados no raio ficam verdes e os demais permanecem cinza.
+Os restaurantes não selecionados ficam cinza, enquanto o restaurante selecionado é destacado em
+laranja. Restaurantes usam um símbolo de alimentação, enquanto entregadores usam um símbolo de
+duas rodas.
+
+A geração da frota acontece exclusivamente no painel: o comando de execução não aceita uma
+quantidade de entregadores como argumento.
 
 Para consultar as demais opções:
 
@@ -52,7 +60,7 @@ Para consultar as demais opções:
 python -m venv .venv
 source .venv/bin/activate
 python scripts/tasks.py setup
-python scripts/tasks.py run 100
+python scripts/tasks.py run
 ```
 
 </details>
@@ -66,6 +74,9 @@ armazenadas em `data/cache/` para evitar consultas e downloads repetidos.
 A opção `--rebuild-processed` recria a base processada. Essa operação pode exigir milhares de
 consultas e deve respeitar a
 [política de uso do Nominatim](https://operations.osmfoundation.org/policies/nominatim/).
+
+Na primeira geração da frota, a aplicação também pode baixar a malha viária de Belo Horizonte.
+As gerações seguintes reutilizam o arquivo salvo em `data/cache/`.
 
 Os dados geográficos utilizados são fornecidos por
 [OpenStreetMap](https://www.openstreetmap.org/copyright) contributors.

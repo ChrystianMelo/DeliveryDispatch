@@ -18,6 +18,7 @@ data/cache/*
 !data/cache/.gitkeep
 experiments/results/*
 !experiments/results/.gitkeep
+!experiments/results/*.csv
 
 # Python bytecode and caches
 __pycache__/

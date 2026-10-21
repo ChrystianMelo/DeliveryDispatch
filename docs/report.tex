@@ -18,8 +18,7 @@
 \title{DeliveryDispatch\\
 \large Motor Híbrido de Busca e Monitoramento Geoespacial\\
 \large Relatório do Trabalho Prático 1 --- DCC207}
-% Preencher com todos os integrantes confirmados antes da entrega.
-\author{}
+\author{Chrystian Melo}
 \date{Outubro de 2026}
 
 \begin{document}
@@ -33,10 +32,17 @@ indexar restaurantes e uma frota sintética de entregadores em Belo Horizonte. A
 abordagem combina codificação Geohash, uma Trie compacta implementada no projeto,
 geração de posições por distribuição normal e projeção dos pontos sobre a malha
 viária do OpenStreetMap. Além das decisões algorítmicas, são apresentados o fluxo
-de preparação dos dados e a estratégia de testes.
+de preparação dos dados, a estratégia de testes e uma avaliação experimental com
+seis consultas realizadas sobre uma frota de 400 entregadores.
 \end{abstract}
 
+\clearpage
+\begingroup
+\normalsize
+\renewcommand{\baselinestretch}{0.86}\selectfont
+\setlength{\parskip}{0pt}
 \tableofcontents
+\endgroup
 \clearpage
 
 \section{Introdução}
@@ -73,7 +79,7 @@ O fluxo principal pode ser resumido nas etapas a seguir:
     \item geração de $N$ posições sintéticas ao redor dos estabelecimentos;
     \item projeção dessas posições para ruas transitáveis;
     \item codificação das coordenadas em Geohash;
-    \item inserção de entregadores, nomes e endereços em Tries compactas.
+    \item construção dos índices textuais e geoespacial e apresentação dos pontos.
 \end{enumerate}
 
 A Tabela~\ref{tab:modules} relaciona as principais responsabilidades aos módulos
@@ -96,12 +102,18 @@ Trie compacta genérica e busca por prefixo \\
 Leitura, validação, retomada e persistência do CSV \\
 \path{services/geocoding.py} &
 Cliente sequencial do Nominatim com cache local \\
+\path{services/bar_search.py} &
+Índices textuais e busca normalizada por nome ou endereço \\
 \path{services/courier_generation.py} &
 Distribuição espacial e construção dos entregadores \\
+\path{services/courier_search.py} &
+Grade Geohash, índice da frota e filtragem por Haversine \\
 \path{services/road_network.py} &
 Carga da malha viária e projeção dos pontos \\
+\path{dashboard.py} &
+Interface Dash e apresentação do mapa interativo \\
 \path{main.py} &
-Orquestração do fluxo e construção dos índices \\
+Preparação dos dados e inicialização obrigatória da interface \\
 \bottomrule
 \end{tabularx}
 \end{table}
@@ -181,7 +193,9 @@ A Trie foi implementada no próprio projeto, sem bibliotecas prontas para a
 estrutura central. Cada nó guarda o trecho completo da aresta que o conecta ao
 pai, em vez de armazenar apenas um caractere. Os filhos ficam em um dicionário
 indexado pelo primeiro caractere da aresta. Uma folha especial identificada por
-\texttt{\$} marca o fim da chave e armazena um valor genérico.
+\texttt{\$} marca o fim da chave e armazena um valor genérico. A escolha parte
+do modelo de árvore de prefixos discutido em aula, adaptado aqui para comprimir
+caminhos sem bifurcação \cite{aula-trie}.
 
 Na inserção, há três casos principais: criação de uma nova aresta, continuação
 por uma aresta totalmente compatível ou divisão da aresta no maior prefixo
@@ -196,14 +210,90 @@ dos resultados custa o número de nós visitados. No contrato esperado, isso é
 expresso como $O(m+k)$, em que $m$ é o tamanho do prefixo e $k$ representa o
 volume retornado.
 
-\subsection{Índices de nome e endereço}
+\subsection{Busca textual: índices e fallback por substring}
 
-Nomes e endereços de restaurantes são normalizados com conversão para caixa
-minúscula, decomposição Unicode, remoção de acentos e redução de sequências de
-espaços. Duas Tries separadas recebem esses textos e os respectivos objetos
-\texttt{Bar}, preparando a busca tanto por nome quanto por endereço.
+Nomes, razões sociais e endereços de restaurantes são normalizados com
+conversão para caixa minúscula, decomposição Unicode, remoção de acentos e
+redução de sequências de espaços. Duas Tries separadas recebem esses textos e
+os respectivos objetos \texttt{Bar}: uma indexa nome fantasia e razão social;
+a outra, o endereço completo. Um sufixo interno único evita que registros com
+textos iguais se sobrescrevam. A consulta percorre primeiro as duas Tries e
+remove duplicatas por identificador, de modo que as correspondências por
+prefixo sejam retornadas com prioridade.
+
+Uma busca restrita a prefixos, entretanto, não cobre entradas usuais como
+``Portugal'' para ``Avenida Portugal'' nem ``Centro'' quando o bairro aparece
+no meio do endereço. Por isso, depois da etapa indexada, o serviço executa um
+\emph{fallback} por substring: percorre os estabelecimentos ainda não
+retornados e verifica se a consulta normalizada ocorre em qualquer parte do
+nome fantasia, da razão social ou do endereço. O mesmo limite de resultados é
+respeitado durante as duas etapas.
+
+Esse desenho evita inserir na Trie todas as palavras e todos os sufixos dos
+textos, o que aumentaria o índice e a complexidade de sua construção. A
+contrapartida é que o fallback faz uma varredura linear nos $B$
+estabelecimentos no pior caso, além do custo das comparações de substring. A
+interface reduz o impacto prático exigindo ao menos dois caracteres, retornando
+no máximo 12 sugestões e colocando antes os resultados obtidos pela Trie.
 
 \section{Busca geoespacial e filtragem}
+
+Cada entregador é inserido em uma Trie compacta usando seu Geohash completo de
+oito caracteres. Um sufixo interno com a posição do registro torna cada chave
+única, portanto vários entregadores podem ocupar exatamente a mesma célula sem
+que um valor substitua o outro.
+
+Na consulta, o raio informado determina dinamicamente a precisão $p$ da grade.
+É escolhida a maior precisão, entre 1 e 8, para a qual a altura e a largura
+aproximadas da célula na latitude consultada ainda são maiores ou iguais ao
+raio. Em uma busca local, essa escolha limita a cobertura à célula do
+restaurante e, no máximo, às oito células imediatamente adjacentes. A rotina
+calcula o retângulo envolvente do círculo e enumera todos os prefixos que o
+interceptam; para raios excepcionalmente grandes, a enumeração é expandida em
+vez de assumir somente nove células. Assim, um entregador próximo não é perdido
+quando uma borda Geohash separa os dois pontos.
+
+Cada prefixo é consultado na Trie e as folhas das respectivas subárvores formam
+o conjunto candidato. Considerando $c$ células consultadas, prefixos de tamanho
+$p$ e $k$ candidatos, essa etapa custa $O(cp+k)$. Como $p\leq 8$ e, nas buscas
+locais, $c\leq 9$, os termos da grade são limitados por constantes pequenas.
+Na interface, o índice construído para uma frota é reutilizado até que uma nova
+geração substitua os entregadores.
+
+A grade é apenas uma aproximação espacial: todos os candidatos passam então
+pelo teste exato de Haversine. Para latitudes $\varphi_1,\varphi_2$, diferença de
+latitude $\Delta\varphi$ e diferença de longitude $\Delta\lambda$, calcula-se
+
+\begin{align}
+a &= \sin^2\left(\frac{\Delta\varphi}{2}\right)
+  + \cos(\varphi_1)\cos(\varphi_2)
+    \sin^2\left(\frac{\Delta\lambda}{2}\right), \\
+d &= 2R\arcsin(\sqrt{a}),
+\end{align}
+
+com $R=6\,371{,}0088\,\mathrm{km}$. Somente entregadores com $d$ menor ou igual
+ao raio solicitado compõem o resultado final. A filtragem custa $O(k)$ e remove
+os falsos positivos introduzidos pelo retângulo de células. A formulação adotada
+segue a definição de distância de grande círculo documentada pelo scikit-learn
+\cite{haversine-sklearn}.
+
+\subsection{Estimativa do tempo de chegada}
+
+O enunciado solicita que a distância seja acompanhada por uma estimativa do
+tempo até o restaurante. Como o sistema não calcula rotas nem recebe a
+velocidade instantânea de cada entregador, adotou-se uma velocidade média
+constante de $30\,\mathrm{km/h}$. Para uma distância $d$ calculada por Haversine,
+o valor exibido na tabela é
+
+\begin{equation}
+t_{\mathrm{min}} = \frac{d}{30}\,60.
+\end{equation}
+
+Essa decisão mantém o cálculo simples, determinístico e suficiente para a
+simulação. O valor deve ser interpretado como uma aproximação em linha reta:
+trânsito, semáforos, relevo e o comprimento real da rota não são considerados.
+Uma extensão futura poderia substituir essa aproximação pelo menor caminho no
+grafo viário e por velocidades associadas a cada trecho.
 
 \section{Geração sintética de entregadores}
 
@@ -214,7 +304,8 @@ quantidades associadas a quaisquer dois centros utilizados é de, no máximo, um
 unidade.
 
 Para cada entregador, são sorteados dois deslocamentos independentes,
-$X,Y \sim \mathcal{N}(0,\sigma^2)$, com $\sigma=500\,\mathrm{m}$. Os
+$X,Y \sim \mathcal{N}(0,\sigma^2)$, com $\sigma=500\,\mathrm{m}$
+\cite{normal-nist}. Os
 deslocamentos são convertidos aproximadamente de metros para graus por
 
 \begin{align}
@@ -225,8 +316,12 @@ deslocamentos são convertidos aproximadamente de metros para graus por
 \end{align}
 
 em que $\varphi$ é a latitude do restaurante. A correção pelo cosseno compensa
-a variação do comprimento de um grau de longitude. A semente padrão é 42, o que
-permite repetir os mesmos sorteios em testes e experimentos.
+a variação do comprimento de um grau de longitude. No serviço, a semente padrão
+é 42, o que permite repetir os mesmos sorteios em testes e chamadas
+programáticas. No painel, o contador de cliques do botão é usado como semente:
+cada nova geração produz uma simulação diferente, mas o resultado permanece
+determinístico para a mesma entrada, a mesma ordem de restaurantes e o mesmo
+contador.
 
 A geração matemática tem custo $O(N)$, desconsiderando a projeção viária. Após
 essa projeção, cada entregador recebe um identificador sequencial, as
@@ -257,6 +352,34 @@ ODbL e requerem atribuição ao projeto e a seus colaboradores
 
 \section{Interface interativa}
 
+A aplicação oferece um painel web construído com Dash e Plotly. O painel mantém
+os controles em uma coluna lateral e reserva a maior parte da tela ao mapa do
+OpenStreetMap. O leiaute é responsivo, de modo que, em telas estreitas, os
+controles passam a aparecer acima do mapa.
+
+O campo de restaurante consulta a base sob demanda, por nome, razão social ou
+endereço. As entradas são normalizadas sem distinção entre caixa e acentos;
+consultas com menos de dois caracteres não são executadas e no máximo 12
+sugestões são enviadas ao navegador. A busca por prefixo nas Tries é
+complementada pelo fallback por substring descrito anteriormente. Ao selecionar
+um resultado geocodificado, o mapa é centralizado no estabelecimento e o
+destaca com uma cor diferente da frota.
+
+O usuário informa a quantidade $N$ e aciona explicitamente a geração. O callback
+valida que o valor seja um inteiro não negativo, executa a geração e substitui o
+estado anterior da sessão pelos novos entregadores. Os pontos são enviados ao
+navegador em formato serializável e exibidos em uma camada gráfica agregada, sem
+criar um componente de interface para cada marcador. Após uma consulta, os
+entregadores aprovados pela filtragem são destacados em verde e os demais
+permanecem cinza. Os restaurantes são exibidos em cinza, exceto o restaurante
+selecionado, destacado em laranja. A interface apresenta como métrica-resumo a
+quantidade de entregadores encontrados. A tabela detalha o identificador, a
+distância, o tempo estimado, as coordenadas e o Geohash de cada resultado,
+ordenados por distância e, em caso de empate, pelo identificador. Durante o
+cálculo, o botão permanece desabilitado; falhas na carga ou
+consulta da malha viária são apresentadas no próprio painel sem apagar a última
+frota válida.
+
 \section{Testes e garantia de qualidade}
 
 Os testes automatizados verificam os contratos das partes isoladas e da
@@ -269,24 +392,125 @@ orquestração. Entre os cenários cobertos estão:
     \item consulta e reaproveitamento do cache de geocodificação sem rede real;
     \item equilíbrio e reprodutibilidade da geração de entregadores;
     \item projeção sobre uma aresta de um grafo sintético;
+    \item normalização, duplicatas, limites e fallback por substring da busca
+    textual;
+    \item cobertura de células adjacentes e filtragem por Haversine;
+    \item validação dos controles e composição do mapa interativo;
     \item integração do fluxo principal por meio de substitutos controlados.
 \end{itemize}
 
 Protocolos para o geocodificador e o projetor viário permitem usar implementações
 falsas nos testes, mantendo a lógica de domínio independente da rede. A
 integração contínua executa análise estática, verificação de formatação, testes e
-construção do pacote com Python 3.12 em Linux e Windows.
+construção do pacote com Python 3.12 em Linux e Windows. Na verificação final
+local, os 69 testes automatizados foram aprovados.
 
 \section{Avaliação experimental}
 
+\subsection{Metodologia}
+
+O experimento foi executado localmente com uma única frota de 400 entregadores.
+A frota foi mantida fixa durante todas as consultas para que a variação do número
+de resultados decorresse apenas do restaurante e do raio escolhidos. Foram
+selecionados os restaurantes Pizzaria Guarani e Rei do Pastel e, para cada um,
+foram avaliados os raios de $0{,}5$, $2{,}0$ e $5{,}0\,\mathrm{km}$. Antes das
+medições, a aplicação e a malha viária já estavam carregadas; portanto, os tempos
+não incluem o download inicial do OpenStreetMap nem a geração da frota.
+
+O tempo foi medido com \texttt{time.perf\_counter} no callback acionado pela
+alteração do restaurante ou do raio. A medição começa na entrada do callback e
+termina após a busca geoespacial, a construção da tabela e a preparação da figura
+do mapa. Ela representa, portanto, o tempo de processamento da aplicação no
+servidor, mas não inclui o transporte da resposta nem a renderização final no
+navegador. Cada linha da Tabela~\ref{tab:experiments} corresponde a uma consulta
+registrada também em \path{experiments/results/consultas.csv}.
+
+\subsection{Resultados}
+
+\begin{table}[htbp]
+\centering
+\small
+\caption{Resultados das consultas com uma frota fixa de 400 entregadores.}
+\label{tab:experiments}
+\begin{tabular}{@{}lrrr@{}}
+\toprule
+Restaurante & Raio (km) & Encontrados & Tempo (ms) \\
+\midrule
+Pizzaria Guarani & 0,5 & 5   & 722,2 \\
+Pizzaria Guarani & 2,0 & 25  & 744,0 \\
+Pizzaria Guarani & 5,0 & 103 & 770,4 \\
+Rei do Pastel    & 0,5 & 3   & 721,7 \\
+Rei do Pastel    & 2,0 & 35  & 739,8 \\
+Rei do Pastel    & 5,0 & 115 & 925,1 \\
+\midrule
+\multicolumn{3}{r}{Média geral} & 770,5 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+Como esperado, o número de entregadores aprovados cresce com o raio: na Pizzaria
+Guarani, passa de 5 para 103; no Rei do Pastel, de 3 para 115. Isso mostra o
+efeito combinado da expansão das células consultadas e da filtragem final por
+distância. Os tempos para $0{,}5\,\mathrm{km}$ ficaram praticamente iguais
+($722{,}2$ e $721{,}7\,\mathrm{ms}$), e os de $2\,\mathrm{km}$ também foram
+próximos ($744{,}0$ e $739{,}8\,\mathrm{ms}$). Para $5\,\mathrm{km}$, a média
+foi $847{,}8\,\mathrm{ms}$, acima das médias de $722{,}0\,\mathrm{ms}$ para
+$0{,}5\,\mathrm{km}$ e $741{,}9\,\mathrm{ms}$ para $2\,\mathrm{km}$. A maior
+consulta visitou uma região mais ampla, retornou mais registros e exigiu a
+montagem de mais elementos no mapa e na tabela.
+
+Esses valores avaliam a aplicação completa no lado do servidor, e não apenas a
+operação $O(m+k)$ da Trie. Como foi realizada uma medição por cenário, os números
+devem ser entendidos como uma demonstração funcional, não como um estudo
+estatístico. Uma avaliação futura pode repetir cada cenário diversas vezes e
+separar o tempo exclusivo da busca do custo de construção da visualização.
+
+A Figura~\ref{fig:experimental-snapshots} registra os seis cenários da
+Tabela~\ref{tab:experiments}. Em cada linha, a Pizzaria Guarani aparece à
+esquerda e o Rei do Pastel à direita; os raios crescem de cima para baixo. No
+raio menor há poucos resultados destacados; no raio maior, a região coberta e a
+tabela de entregadores crescem de forma perceptível.
+
+\begin{figure}[p]
+    \centering
+    \includegraphics[width=0.45\textwidth]{figures/consulta-restaurante-1-raio-0-5km.png}
+    \hfill
+    \includegraphics[width=0.45\textwidth]{figures/consulta-restaurante-2-raio-0-5km.png}
+    \par\medskip
+    \includegraphics[width=0.45\textwidth]{figures/consulta-restaurante-1-raio-2km.png}
+    \hfill
+    \includegraphics[width=0.45\textwidth]{figures/consulta-restaurante-2-raio-2km.png}
+    \par\medskip
+    \includegraphics[width=0.45\textwidth]{figures/consulta-restaurante-1-raio-5km.png}
+    \hfill
+    \includegraphics[width=0.45\textwidth]{figures/consulta-restaurante-2-raio-5km.png}
+    \caption{Snapshots dos seis cenários experimentais. Da primeira à terceira
+    linha, os raios são $0{,}5$, $2$ e $5\,\mathrm{km}$; da esquerda para a
+    direita, Pizzaria Guarani e Rei do Pastel.}
+    \label{fig:experimental-snapshots}
+\end{figure}
+
+\clearpage
 \section{Conclusão}
 
-O DeliveryDispatch estabelece a base de dados e os principais componentes
-algorítmicos da solução. A codificação Geohash e a Trie compacta foram
-implementadas diretamente, enquanto bibliotecas geoespaciais foram reservadas
-para geocodificação, sistemas de coordenadas e malha viária. A geração sintética
-reproduzível e a projeção sobre ruas completam a infraestrutura necessária para
-produzir uma frota plausível.
+O DeliveryDispatch atende ao fluxo proposto: prepara a base de restaurantes,
+gera uma frota sintética concentrada em regiões de demanda, corrige as posições
+para a malha viária, indexa os entregadores em uma Trie compacta e combina a
+busca aproximada por Geohash com a filtragem exata por Haversine. A codificação
+Geohash e a Trie foram implementadas diretamente, enquanto bibliotecas externas
+foram reservadas para interface, projeções cartográficas e acesso ao
+OpenStreetMap.
+
+As principais decisões buscaram equilibrar correção e simplicidade: células
+adjacentes evitam falsos negativos nas bordas do Geohash; o sufixo único preserva
+entregadores na mesma célula; a distribuição normal aproxima regiões de demanda;
+o cache reduz acessos repetidos aos serviços externos; e a velocidade média de
+$30\,\mathrm{km/h}$ fornece uma estimativa de chegada explícita e reproduzível.
+Nos seis cenários experimentais, a interface retornou de 3 a 115 entregadores,
+com tempos de processamento entre $721{,}7$ e $925{,}1\,\mathrm{ms}$. Os
+resultados e os testes automatizados sustentam a correção funcional da solução,
+enquanto roteamento real e uma avaliação com repetições permanecem como possíveis
+aperfeiçoamentos.
 
 \begin{thebibliography}{9}
 
@@ -295,31 +519,44 @@ Vimieiro, Renato.
 \emph{Trabalho Prático 1 --- Indexação Geoespacial e Geometria Computacional Híbrida}.
 DCC207 --- Algoritmos 2, Universidade Federal de Minas Gerais, 2026.
 
+\bibitem{aula-trie}
+Vimieiro, Renato.
+\emph{Aula 03 --- Estruturas de dados para casamento de padrões: árvore Trie e de sufixos}.
+Slides da disciplina DCC207 --- Algoritmos 2, DCC/ICEx/UFMG, 2026.
+
+\bibitem{haversine-sklearn}
+scikit-learn developers.
+\emph{haversine\_distances --- scikit-learn documentation}.
+Disponível em:
+\url{https://scikit-learn.org/stable/modules/generated/sklearn.metrics.pairwise.haversine_distances.html}.
+
+\bibitem{normal-nist}
+National Institute of Standards and Technology.
+\emph{Normal Distribution}. \emph{NIST/SEMATECH e-Handbook of Statistical Methods}.
+Disponível em:
+\url{https://itl.nist.gov/div898/handbook/eda/section3/eda3661.htm}.
+
 \bibitem{elastic-geohash-grid}
 Elastic.
 \emph{Geohash grid aggregation: cell dimensions at the equator}.
 Disponível em:
 \url{https://www.elastic.co/docs/reference/aggregations/search-aggregations-bucket-geohashgrid-aggregation}.
-Acesso em: 19 out. 2026.
 
 \bibitem{osmnx-docs}
 OSMnx.
 \emph{OSMnx documentation}.
 Disponível em: \url{https://osmnx.readthedocs.io/}.
-Acesso em: 19 out. 2026.
 
 \bibitem{nominatim-policy}
 OpenStreetMap Foundation.
 \emph{Nominatim Usage Policy}.
 Disponível em:
 \url{https://operations.osmfoundation.org/policies/nominatim/}.
-Acesso em: 19 out. 2026.
 
 \bibitem{osm-copyright}
 OpenStreetMap.
 \emph{Copyright and License}.
 Disponível em: \url{https://www.openstreetmap.org/copyright}.
-Acesso em: 19 out. 2026.
 
 \end{thebibliography}
 

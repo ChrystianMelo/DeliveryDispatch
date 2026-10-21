@@ -196,7 +196,7 @@ def _add_courier_trace(
 
     if highlighted:
         # Os símbolos Maki desta versão do Plotly não recebem a cor do marcador.
-        # Apenas o resultado da busca ganha o halo vermelho, sem adicionar um
+        # Apenas o resultado da busca ganha o halo verde, sem adicionar um
         # fundo aos entregadores que não foram selecionados.
         figure.add_trace(
             go.Scattermap(
