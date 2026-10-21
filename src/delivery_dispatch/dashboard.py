@@ -113,9 +113,7 @@ def restaurant_option(bar: Bar) -> dict[str, str | int]:
     }
 
 
-def _selected_bar(
-    bars_by_id: Mapping[int, Bar], selected_bar_id: int | str | None
-) -> Bar | None:
+def _selected_bar(bars_by_id: Mapping[int, Bar], selected_bar_id: int | str | None) -> Bar | None:
     if selected_bar_id is None:
         return None
     try:
@@ -263,9 +261,7 @@ def build_map_figure(
         bar
         for bar in bars_by_id.values()
         if bar.coordinates is not None
-        and (
-            selected_with_coordinates is None or bar.id != selected_with_coordinates.id
-        )
+        and (selected_with_coordinates is None or bar.id != selected_with_coordinates.id)
     ]
 
     figure = go.Figure()
@@ -283,16 +279,12 @@ def build_map_figure(
                     "symbol": BAR_MARKER_SYMBOL,
                 },
                 customdata=[[bar.name, bar.address] for bar in visible_bars],
-                hovertemplate=(
-                    "<b>%{customdata[0]}</b><br>%{customdata[1]}<extra></extra>"
-                ),
+                hovertemplate=("<b>%{customdata[0]}</b><br>%{customdata[1]}<extra></extra>"),
                 name="Restaurantes",
             )
         )
 
-    regular_records = [
-        record for record in records if int(record["id"]) not in nearby_ids
-    ]
+    regular_records = [record for record in records if int(record["id"]) not in nearby_ids]
     nearby_records = [record for record in records if int(record["id"]) in nearby_ids]
     _add_courier_trace(
         figure,
@@ -301,9 +293,7 @@ def build_map_figure(
         color=COURIER_COLOR,
         highlighted=False,
         name=(
-            "Entregadores fora do raio"
-            if selected_with_coordinates is not None
-            else "Entregadores"
+            "Entregadores fora do raio" if selected_with_coordinates is not None else "Entregadores"
         ),
     )
     _add_courier_trace(
@@ -320,9 +310,7 @@ def build_map_figure(
         assert selected_with_coordinates.longitude is not None
         selected_latitude = selected_with_coordinates.latitude
         selected_longitude = selected_with_coordinates.longitude
-        selected_customdata = [
-            [selected_with_coordinates.name, selected_with_coordinates.address]
-        ]
+        selected_customdata = [[selected_with_coordinates.name, selected_with_coordinates.address]]
         figure.add_trace(
             go.Scattermap(
                 lat=[selected_latitude],
@@ -333,9 +321,7 @@ def build_map_figure(
                     "size": 22,
                 },
                 customdata=selected_customdata,
-                hovertemplate=(
-                    "<b>%{customdata[0]}</b><br>%{customdata[1]}<extra></extra>"
-                ),
+                hovertemplate=("<b>%{customdata[0]}</b><br>%{customdata[1]}<extra></extra>"),
                 legendgroup="selected-restaurant",
                 name="Restaurante selecionado",
             )
@@ -352,9 +338,7 @@ def build_map_figure(
                     "symbol": BAR_MARKER_SYMBOL,
                 },
                 customdata=selected_customdata,
-                hovertemplate=(
-                    "<b>%{customdata[0]}</b><br>%{customdata[1]}<extra></extra>"
-                ),
+                hovertemplate=("<b>%{customdata[0]}</b><br>%{customdata[1]}<extra></extra>"),
                 legendgroup="selected-restaurant",
                 name="Ícone do restaurante selecionado",
                 showlegend=False,
@@ -500,9 +484,7 @@ def _empty_restaurant_card() -> html.Div:
             html.Div(className="selection-pin selection-pin--empty"),
             html.Div(
                 [
-                    html.P(
-                        "Nenhum restaurante selecionado", className="selection-title"
-                    ),
+                    html.P("Nenhum restaurante selecionado", className="selection-title"),
                     html.P(
                         "Busque acima para destacar um ponto no mapa.",
                         className="selection-copy",
@@ -623,9 +605,7 @@ def _layout(bars_by_id: Mapping[int, Bar]) -> html.Div:
                                         maxHeight=320,
                                         className="restaurant-dropdown",
                                     ),
-                                    html.Div(
-                                        _empty_restaurant_card(), id="restaurant-card"
-                                    ),
+                                    html.Div(_empty_restaurant_card(), id="restaurant-card"),
                                     html.Label(
                                         "Raio de busca dos entregadores",
                                         htmlFor="search-radius",
@@ -686,9 +666,7 @@ def _layout(bars_by_id: Mapping[int, Bar]) -> html.Div:
                                                 debounce=True,
                                                 inputMode="numeric",
                                             ),
-                                            html.Span(
-                                                "ENTREGADORES", className="input-suffix"
-                                            ),
+                                            html.Span("ENTREGADORES", className="input-suffix"),
                                         ],
                                         className="number-field",
                                     ),
@@ -724,9 +702,7 @@ def _layout(bars_by_id: Mapping[int, Bar]) -> html.Div:
                                 [
                                     html.Div(
                                         [
-                                            html.Strong(
-                                                f"{located_bars:,}".replace(",", ".")
-                                            ),
+                                            html.Strong(f"{located_bars:,}".replace(",", ".")),
                                             html.Span("no mapa"),
                                         ],
                                         className="data-stat",
@@ -734,9 +710,7 @@ def _layout(bars_by_id: Mapping[int, Bar]) -> html.Div:
                                     html.Div(className="data-rule"),
                                     html.Div(
                                         [
-                                            html.Strong(
-                                                f"{total_bars:,}".replace(",", ".")
-                                            ),
+                                            html.Strong(f"{total_bars:,}".replace(",", ".")),
                                             html.Span("na base"),
                                         ],
                                         className="data-stat",
@@ -862,9 +836,7 @@ def create_app(
     search_index = BarSearchIndex(all_bars)
     generation_lock = threading.Lock()
 
-    assets_path = (
-        Path(assets_folder) if assets_folder else Path(__file__).with_name("assets")
-    )
+    assets_path = Path(assets_folder) if assets_folder else Path(__file__).with_name("assets")
     app = Dash(
         __name__,
         assets_folder=str(assets_path),
