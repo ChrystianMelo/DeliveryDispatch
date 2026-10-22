@@ -18,7 +18,7 @@ PROJECT_ROOT = Path(__file__).resolve().parents[2]
 DEFAULT_CSV_PATH = PROJECT_ROOT / "data" / "raw" / "bares.csv"
 DEFAULT_PROCESSED_CSV_PATH = PROJECT_ROOT / "data" / "processed" / "bares_geocodificados.csv"
 DEFAULT_CACHE_PATH = PROJECT_ROOT / "data" / "cache" / "bar_geocoding.json"
-DEFAULT_ROAD_GRAPH_PATH = PROJECT_ROOT / "data" / "cache" / "belo_horizonte_drive.graphml"
+DEFAULT_ROAD_GRAPH_PATH = PROJECT_ROOT / "data" / "processed" / "belo_horizonte_drive.graphml"
 DEFAULT_USER_AGENT = "DeliveryDispatch/0.1 (projeto acadêmico)"
 LOGGER = logging.getLogger(__name__)
 

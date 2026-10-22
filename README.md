@@ -68,15 +68,16 @@ python scripts/tasks.py run
 ## Dados e cache
 
 A base enriquecida com coordenadas fica em
-`data/processed/bares_geocodificados.csv`. Respostas de geocodificação e a malha viária são
-armazenadas em `data/cache/` para evitar consultas e downloads repetidos.
+`data/processed/bares_geocodificados.csv`. As respostas de geocodificação são armazenadas em
+`data/cache/` para evitar consultas repetidas. A malha viária pronta para uso fica em
+`data/processed/belo_horizonte_drive.graphml`, permitindo distribuí-la junto ao projeto.
 
 A opção `--rebuild-processed` recria a base processada. Essa operação pode exigir milhares de
 consultas e deve respeitar a
 [política de uso do Nominatim](https://operations.osmfoundation.org/policies/nominatim/).
 
 Na primeira geração da frota, a aplicação também pode baixar a malha viária de Belo Horizonte.
-As gerações seguintes reutilizam o arquivo salvo em `data/cache/`.
+As gerações seguintes reutilizam o arquivo salvo em `data/processed/`.
 
 Os dados geográficos utilizados são fornecidos por
 [OpenStreetMap](https://www.openstreetmap.org/copyright) contributors.
