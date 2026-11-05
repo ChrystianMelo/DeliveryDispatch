@@ -2,7 +2,7 @@
 
 \usepackage[T1]{fontenc}
 \usepackage[utf8]{inputenc}
-\usepackage[brazilian]{babel}
+\usepackage[english]{babel}
 \usepackage{amsmath}
 \usepackage{booktabs}
 \usepackage{geometry}
@@ -16,10 +16,10 @@
 \setlength{\parskip}{0.2em}
 
 \title{DeliveryDispatch\\
-\large Motor Híbrido de Busca e Monitoramento Geoespacial\\
-\large Relatório do Trabalho Prático 1 --- DCC207}
+\large Hybrid Geospatial Search and Monitoring Engine\\
+\large Practical Assignment 1 Report --- DCC207}
 \author{Chrystian Melo}
-\date{Outubro de 2026}
+\date{October 2026}
 
 \begin{document}
 
@@ -27,13 +27,14 @@
 \thispagestyle{empty}
 
 \begin{abstract}
-Este relatório descreve o desenvolvimento do DeliveryDispatch, uma solução para
-indexar restaurantes e uma frota sintética de entregadores em Belo Horizonte. A
-abordagem combina codificação Geohash, uma Trie compacta implementada no projeto,
-geração de posições por distribuição normal e projeção dos pontos sobre a malha
-viária do OpenStreetMap. Além das decisões algorítmicas, são apresentados o fluxo
-de preparação dos dados, a estratégia de testes e uma avaliação experimental com
-seis consultas realizadas sobre uma frota de 400 entregadores.
+This report describes the development of DeliveryDispatch, a solution for
+indexing restaurants and a synthetic courier fleet in Belo Horizonte. The
+approach combines Geohash encoding, a compact Trie implemented as part of the
+project, position generation using a normal distribution, and projection of
+points onto the OpenStreetMap road network. In addition to the algorithmic
+decisions, this report presents the data-preparation pipeline, the testing
+strategy, and an experimental evaluation with six queries performed on a fleet
+of 400 couriers.
 \end{abstract}
 
 \clearpage
@@ -45,224 +46,223 @@ seis consultas realizadas sobre uma frota de 400 entregadores.
 \endgroup
 \clearpage
 
-\section{Introdução}
+\section{Introduction}
 
-O problema proposto consiste em construir um motor de busca e monitoramento
-geoespacial para uma frota de entregadores em operação na cidade de Belo
-Horizonte. A partir de um restaurante selecionado, o sistema deve localizar
-rapidamente os entregadores candidatos, eliminar aqueles fora de um raio de
-atendimento e apresentar os resultados em um mapa interativo, acompanhados de
-distâncias e estimativas de tempo de chegada \cite{enunciado}.
+The proposed problem consists of building a geospatial search and monitoring
+engine for a courier fleet operating in the city of Belo Horizonte. Given a
+selected restaurant, the system must quickly locate candidate couriers, remove
+those outside a service radius, and display the results on an interactive map,
+together with distances and estimated arrival times \cite{enunciado}.
 
-Uma busca exata sobre toda a frota teria custo proporcional ao número total de
-entregadores em cada consulta. Para reduzir esse espaço, a solução associa cada
-posição a uma célula Geohash e usa prefixos dessas células como chaves de uma
-Trie compacta. A seleção por prefixo fornece um conjunto candidato; em seguida,
-uma etapa geométrica deve tratar células adjacentes e verificar a distância real
-até o restaurante. Essa combinação busca conciliar velocidade de indexação com
-precisão espacial.
+An exact search over the entire fleet would have a cost proportional to the
+total number of couriers for every query. To reduce this search space, the
+solution associates each position with a Geohash cell and uses prefixes of
+those cells as keys in a compact Trie. Prefix selection yields a candidate set;
+a subsequent geometric stage then accounts for adjacent cells and verifies the
+actual distance to the restaurant. This combination seeks to balance indexing
+speed with spatial accuracy.
 
-O desenvolvimento ocorre no contexto do Trabalho Prático 1 da disciplina
-DCC207 --- Algoritmos 2. Este documento concentra a descrição técnica e as
-decisões de projeto, enquanto o README do repositório permanece voltado à
-instalação e à execução.
+The project was developed for Practical Assignment 1 in the course
+DCC207 --- Algorithms 2. This document focuses on the technical description and
+design decisions, while the repository README remains focused on installation
+and execution.
 
-\section{Arquitetura e fluxo de dados}
+\section{Architecture and data flow}
 
-A implementação foi dividida em algoritmos, modelos, acesso a dados e serviços.
-O fluxo principal pode ser resumido nas etapas a seguir:
+The implementation was divided into algorithms, models, data access, and
+services. The main pipeline can be summarized as follows:
 
 \begin{enumerate}
-    \item leitura da base fornecida de bares e restaurantes;
-    \item geocodificação dos endereços ainda pendentes;
-    \item persistência do CSV enriquecido e construção dos objetos de domínio;
-    \item geração de $N$ posições sintéticas ao redor dos estabelecimentos;
-    \item projeção dessas posições para ruas transitáveis;
-    \item codificação das coordenadas em Geohash;
-    \item construção dos índices textuais e geoespacial e apresentação dos pontos.
+    \item read the provided bar and restaurant dataset;
+    \item geocode addresses that are still pending;
+    \item persist the enriched CSV and construct the domain objects;
+    \item generate $N$ synthetic positions around the establishments;
+    \item project those positions onto drivable roads;
+    \item encode the coordinates as Geohashes;
+    \item build the textual and geospatial indexes and display the points.
 \end{enumerate}
 
-A Tabela~\ref{tab:modules} relaciona as principais responsabilidades aos módulos
-que as implementam.
+Table~\ref{tab:modules} maps the main responsibilities to the modules that
+implement them.
 
 \begin{table}[htbp]
 \centering
 \small
-\caption{Organização dos componentes principais.}
+\caption{Organization of the main components.}
 \label{tab:modules}
 \begin{tabularx}{\textwidth}{@{}p{0.41\textwidth}X@{}}
 \toprule
-Módulo & Responsabilidade \\
+Module & Responsibility \\
 \midrule
 \path{algorithms/geohash.py} &
-Codificação e decodificação Geohash \\
+Geohash encoding and decoding \\
 \path{algorithms/compact_trie.py} &
-Trie compacta genérica e busca por prefixo \\
+Generic compact Trie and prefix search \\
 \path{data/bar_loader.py} &
-Leitura, validação, retomada e persistência do CSV \\
+CSV reading, validation, resumption, and persistence \\
 \path{services/geocoding.py} &
-Cliente sequencial do Nominatim com cache local \\
+Sequential Nominatim client with a local cache \\
 \path{services/bar_search.py} &
-Índices textuais e busca normalizada por nome ou endereço \\
+Text indexes and normalized search by name or address \\
 \path{services/courier_generation.py} &
-Distribuição espacial e construção dos entregadores \\
+Spatial distribution and courier construction \\
 \path{services/courier_search.py} &
-Grade Geohash, índice da frota e filtragem por Haversine \\
+Geohash grid, fleet index, and Haversine filtering \\
 \path{services/road_network.py} &
-Carga da malha viária e projeção dos pontos \\
+Road-network loading and point projection \\
 \path{dashboard.py} &
-Interface Dash e apresentação do mapa interativo \\
+Dash interface and interactive map display \\
 \path{main.py} &
-Preparação dos dados e inicialização obrigatória da interface \\
+Data preparation and mandatory interface initialization \\
 \bottomrule
 \end{tabularx}
 \end{table}
 
-Os modelos \texttt{Bar} e \texttt{Courier} são dataclasses imutáveis. Essa
-decisão torna explícito quando um registro é substituído após a geocodificação e
-evita alterações acidentais enquanto o mesmo objeto é referenciado pelos índices.
+The \texttt{Bar} and \texttt{Courier} models are immutable dataclasses. This
+decision makes it explicit when a record is replaced after geocoding and
+prevents accidental changes while the same object is referenced by the indexes.
 
-\section{Preparação da base geográfica}
+\section{Geographic data preparation}
 
-\subsection{Leitura e persistência}
+\subsection{Reading and persistence}
 
-O carregador valida a presença das colunas obrigatórias e converte cada linha em
-um objeto \texttt{Bar}. O CSV processado acrescenta latitude, longitude e
-\texttt{GEOCODING\_STATUS}; o Geohash é calculado em memória ao carregar o
-registro e, portanto, não é duplicado no arquivo.
+The loader validates the presence of the required columns and converts each row
+into a \texttt{Bar} object. The processed CSV adds latitude, longitude, and
+\texttt{GEOCODING\_STATUS}; the Geohash is calculated in memory when the record
+is loaded and is therefore not duplicated in the file.
 
-A persistência usa um arquivo temporário, posteriormente movido sobre o destino.
-Esse procedimento reduz o risco de deixar um CSV parcialmente escrito em caso de
-interrupção. Durante uma execução de geocodificação, também são salvos
-\emph{checkpoints} a cada 100 consultas. Registros com estado
-\texttt{found} ou \texttt{not\_found} não são consultados novamente, permitindo
-retomar o processamento dos itens ainda marcados como \texttt{pending}.
+Persistence uses a temporary file that is subsequently moved to replace the
+destination file.
+This procedure reduces the risk of leaving a partially written CSV if an
+interruption occurs. During a geocoding run, checkpoints are also saved every
+100 queries. Records with the \texttt{found} or \texttt{not\_found} status are
+not queried again, allowing processing to resume for items still marked as
+\texttt{pending}.
 
-\subsection{Geocodificação e cache}
+\subsection{Geocoding and cache}
 
-O cliente Nominatim envia as requisições sequencialmente, identifica a aplicação
-por \emph{User-Agent}, limita a frequência a uma requisição por segundo e
-mantém um cache JSON local. Essas medidas reduzem consultas repetidas e seguem
-as principais restrições do serviço público \cite{nominatim-policy}. O cache não
-é versionado.
+The Nominatim client sends requests sequentially, identifies the application
+with a \emph{User-Agent}, limits the rate to one request per second, and
+maintains a local JSON cache. These measures reduce repeated queries and comply
+with the main restrictions of the public service \cite{nominatim-policy}. The
+cache is not version-controlled.
 
-Ao término do processamento, a base apresentou a distribuição
-da Tabela~\ref{tab:geocoding}.
+After processing, the dataset had the distribution shown in
+Table~\ref{tab:geocoding}.
 
 \begin{table}[htbp]
 \centering
-\caption{Resultado da preparação da base fornecida.}
+\caption{Results of preparing the provided dataset.}
 \label{tab:geocoding}
 \begin{tabular}{@{}lrr@{}}
 \toprule
-Estado & Registros & Proporção \\
+Status & Records & Proportion \\
 \midrule
-Encontrados (\texttt{found}) & 19\,238 & 92,23\% \\
-Não encontrados (\texttt{not\_found}) & 1\,621 & 7,77\% \\
-Pendentes (\texttt{pending}) & 0 & 0,00\% \\
+Found (\texttt{found}) & 19\,238 & 92.23\% \\
+Not found (\texttt{not\_found}) & 1\,621 & 7.77\% \\
+Pending (\texttt{pending}) & 0 & 0.00\% \\
 \midrule
-Total & 20\,859 & 100,00\% \\
+Total & 20\,859 & 100.00\% \\
 \bottomrule
 \end{tabular}
 \end{table}
 
-\section{Algoritmos e decisões de projeto}
+\section{Algorithms and design decisions}
 
-\subsection{Codificação Geohash}
+\subsection{Geohash encoding}
 
-A implementação inicia com os intervalos $[-180,180]$ para longitude e
-$[-90,90]$ para latitude. Cada bit divide um dos intervalos ao meio. Os bits de
-índice par refinam a longitude e os de índice ímpar refinam a latitude, portanto
-a intercalação começa pela longitude. A cada cinco decisões binárias, o valor
-obtido seleciona um caractere do alfabeto Base32 do Geohash.
+The implementation begins with the intervals $[-180,180]$ for longitude and
+$[-90,90]$ for latitude. Each bit bisects one of the intervals. Even-indexed
+bits refine longitude and odd-indexed bits refine latitude, so interleaving
+begins with longitude. After every five binary decisions, the resulting value
+selects a character from the Geohash Base32 alphabet.
 
-Para uma precisão de $p$ caracteres, são realizadas $5p$ subdivisões. Assim, o
-tempo e o espaço da codificação são $O(p)$; neste projeto, $1 \leq p \leq 8$.
-A decodificação percorre o caminho inverso e retorna o centro da célula
-representada. Como referência de escala, no equador uma célula com oito
-caracteres mede aproximadamente $38{,}2\,\mathrm{m} \times 19\,\mathrm{m}$,
-com dimensões que variam conforme a latitude \cite{elastic-geohash-grid}.
+For a precision of $p$ characters, $5p$ subdivisions are performed. Thus,
+encoding time and space are $O(p)$; in this project, $1 \leq p \leq 8$.
+Decoding follows the reverse path and returns the center of the represented
+cell. As a scale reference, at the equator an eight-character cell measures
+approximately $38.2\,\mathrm{m} \times 19\,\mathrm{m}$, with dimensions that
+vary according to latitude \cite{elastic-geohash-grid}.
 
-Geohash fornece uma aproximação espacial, não uma distância métrica. Além disso,
-pontos próximos podem cair em células diferentes quando estão em lados opostos
-de uma borda.
+Geohash provides a spatial approximation, not a metric distance. Furthermore,
+nearby points may fall into different cells when they lie on opposite sides of
+a boundary.
 
-\subsection{Trie compacta}
+\subsection{Compact Trie}
 
-A Trie foi implementada no próprio projeto, sem bibliotecas prontas para a
-estrutura central. Cada nó guarda o trecho completo da aresta que o conecta ao
-pai, em vez de armazenar apenas um caractere. Os filhos ficam em um dicionário
-indexado pelo primeiro caractere da aresta. Uma folha especial identificada por
-\texttt{\$} marca o fim da chave e armazena um valor genérico. A escolha parte
-do modelo de árvore de prefixos discutido em aula, adaptado aqui para comprimir
-caminhos sem bifurcação \cite{aula-trie}.
+The Trie was implemented within the project, without off-the-shelf libraries
+for the core data structure. Each node stores the full segment of the edge that
+connects it to its parent rather than a single character. Children are kept in
+a dictionary indexed by the edge's first character. A special leaf identified
+by \texttt{\$} marks the end of the key and stores a generic value. This choice
+is based on the prefix-tree model discussed in class, adapted here to compress
+paths without branching \cite{aula-trie}.
 
-Na inserção, há três casos principais: criação de uma nova aresta, continuação
-por uma aresta totalmente compatível ou divisão da aresta no maior prefixo
-comum. A remoção executa o processo inverso e volta a unir caminhos que ficam
-com um único filho não terminal. Esse mecanismo reduz cadeias de nós sem
-bifurcação.
+Insertion has three main cases: creating a new edge, continuing along a fully
+matching edge, or splitting the edge at the longest common prefix. Removal
+performs the inverse process and rejoins paths left with a single nonterminal
+child. This mechanism reduces chains of nonbranching nodes.
 
-A busca consome o prefixo ao longo das arestas compactadas e, depois da
-correspondência, coleta as folhas da subárvore. Considerando acesso médio
-constante ao dicionário de filhos, a navegação custa $O(m)$ e a materialização
-dos resultados custa o número de nós visitados. No contrato esperado, isso é
-expresso como $O(m+k)$, em que $m$ é o tamanho do prefixo e $k$ representa o
-volume retornado.
+The search consumes the prefix along the compressed edges and, after a match,
+collects the leaves of the subtree. Assuming constant average-time access to
+the child dictionary, navigation costs $O(m)$, while materializing the results
+costs the number of nodes visited. Under the expected contract, this is
+expressed as $O(m+k)$, where $m$ is the prefix length and $k$ represents the
+number of results returned.
 
-\subsection{Busca textual: índices e fallback por substring}
+\subsection{Text search: indexes and substring fallback}
 
-Nomes, razões sociais e endereços de restaurantes são normalizados com
-conversão para caixa minúscula, decomposição Unicode, remoção de acentos e
-redução de sequências de espaços. Duas Tries separadas recebem esses textos e
-os respectivos objetos \texttt{Bar}: uma indexa nome fantasia e razão social;
-a outra, o endereço completo. Um sufixo interno único evita que registros com
-textos iguais se sobrescrevam. A consulta percorre primeiro as duas Tries e
-remove duplicatas por identificador, de modo que as correspondências por
-prefixo sejam retornadas com prioridade.
+Restaurant trade names, legal names, and addresses are normalized by converting
+them to lowercase, applying Unicode decomposition, removing accents, and
+collapsing whitespace sequences. Two separate Tries receive these texts and
+their respective \texttt{Bar} objects: one indexes trade and legal names; the
+other indexes the full address. A unique internal suffix prevents records with
+identical text from overwriting one another. The query first traverses both
+Tries and removes duplicates by identifier, so prefix matches are returned with
+priority.
 
-Uma busca restrita a prefixos, entretanto, não cobre entradas usuais como
-``Portugal'' para ``Avenida Portugal'' nem ``Centro'' quando o bairro aparece
-no meio do endereço. Por isso, depois da etapa indexada, o serviço executa um
-\emph{fallback} por substring: percorre os estabelecimentos ainda não
-retornados e verifica se a consulta normalizada ocorre em qualquer parte do
-nome fantasia, da razão social ou do endereço. O mesmo limite de resultados é
-respeitado durante as duas etapas.
+A prefix-only search, however, does not cover common inputs such as
+``Portugal'' for ``Avenida Portugal'' or ``Centro'' when the neighborhood
+appears in the middle of the address. Therefore, after the indexed stage, the
+service performs a substring fallback: it scans establishments not yet
+returned and checks whether the normalized query occurs anywhere in the trade
+name, legal name, or address. The same result limit is enforced during both
+stages.
 
-Esse desenho evita inserir na Trie todas as palavras e todos os sufixos dos
-textos, o que aumentaria o índice e a complexidade de sua construção. A
-contrapartida é que o fallback faz uma varredura linear nos $B$
-estabelecimentos no pior caso, além do custo das comparações de substring. A
-interface reduz o impacto prático exigindo ao menos dois caracteres, retornando
-no máximo 12 sugestões e colocando antes os resultados obtidos pela Trie.
+This design avoids inserting every word and every text suffix into the Trie,
+which would increase the index size and construction complexity. The trade-off
+is that, in the worst case, the fallback performs a linear scan of the $B$
+establishments, in addition to the cost of substring comparisons. The
+interface reduces the practical impact by requiring at least two characters,
+returning at most 12 suggestions, and placing Trie results first.
 
-\section{Busca geoespacial e filtragem}
+\section{Geospatial search and filtering}
 
-Cada entregador é inserido em uma Trie compacta usando seu Geohash completo de
-oito caracteres. Um sufixo interno com a posição do registro torna cada chave
-única, portanto vários entregadores podem ocupar exatamente a mesma célula sem
-que um valor substitua o outro.
+Each courier is inserted into a compact Trie using its full eight-character
+Geohash. An internal suffix containing the record position makes each key
+unique, so several couriers can occupy exactly the same cell without one value
+replacing another.
 
-Na consulta, o raio informado determina dinamicamente a precisão $p$ da grade.
-É escolhida a maior precisão, entre 1 e 8, para a qual a altura e a largura
-aproximadas da célula na latitude consultada ainda são maiores ou iguais ao
-raio. Em uma busca local, essa escolha limita a cobertura à célula do
-restaurante e, no máximo, às oito células imediatamente adjacentes. A rotina
-calcula o retângulo envolvente do círculo e enumera todos os prefixos que o
-interceptam; para raios excepcionalmente grandes, a enumeração é expandida em
-vez de assumir somente nove células. Assim, um entregador próximo não é perdido
-quando uma borda Geohash separa os dois pontos.
+For each query, the specified radius dynamically determines the grid precision
+$p$. The greatest precision from 1 to 8 whose approximate cell height and width
+at the query latitude are both at least as large as the radius is selected. For
+a local search, this choice limits coverage to the
+restaurant's cell and, at most, its eight immediately adjacent cells. The
+routine calculates the circle's bounding rectangle and enumerates every prefix
+that intersects it; for exceptionally large radii, the enumeration is expanded
+instead of assuming only nine cells. Consequently, a nearby courier is not
+missed when a Geohash boundary separates the two points.
 
-Cada prefixo é consultado na Trie e as folhas das respectivas subárvores formam
-o conjunto candidato. Considerando $c$ células consultadas, prefixos de tamanho
-$p$ e $k$ candidatos, essa etapa custa $O(cp+k)$. Como $p\leq 8$ e, nas buscas
-locais, $c\leq 9$, os termos da grade são limitados por constantes pequenas.
-Na interface, o índice construído para uma frota é reutilizado até que uma nova
-geração substitua os entregadores.
+Each prefix is queried in the Trie, and the leaves of the corresponding
+subtrees form the candidate set. Given $c$ queried cells, prefixes of length
+$p$, and $k$ candidates, this stage costs $O(cp+k)$. Since $p\leq 8$ and, for
+local searches, $c\leq 9$, the grid terms are bounded by small constants. In
+the interface, the index built for a fleet is reused until a new generation
+replaces the couriers.
 
-A grade é apenas uma aproximação espacial: todos os candidatos passam então
-pelo teste exato de Haversine. Para latitudes $\varphi_1,\varphi_2$, diferença de
-latitude $\Delta\varphi$ e diferença de longitude $\Delta\lambda$, calcula-se
+The grid is only a spatial approximation: all candidates therefore undergo the
+exact Haversine test. For latitudes $\varphi_1,\varphi_2$, latitude difference
+$\Delta\varphi$, and longitude difference $\Delta\lambda$, the calculation is
 
 \begin{align}
 a &= \sin^2\left(\frac{\Delta\varphi}{2}\right)
@@ -271,42 +271,42 @@ a &= \sin^2\left(\frac{\Delta\varphi}{2}\right)
 d &= 2R\arcsin(\sqrt{a}),
 \end{align}
 
-com $R=6\,371{,}0088\,\mathrm{km}$. Somente entregadores com $d$ menor ou igual
-ao raio solicitado compõem o resultado final. A filtragem custa $O(k)$ e remove
-os falsos positivos introduzidos pelo retângulo de células. A formulação adotada
-segue a definição de distância de grande círculo documentada pelo scikit-learn
-\cite{haversine-sklearn}.
+with $R=6\,371.0088\,\mathrm{km}$. Only couriers whose $d$ is less than or equal
+to the requested radius are included in the final result. Filtering costs
+$O(k)$ and removes the false positives introduced by the rectangular cell
+coverage.
+The adopted formulation follows the definition of great-circle distance
+documented by scikit-learn \cite{haversine-sklearn}.
 
-\subsection{Estimativa do tempo de chegada}
+\subsection{Arrival-time estimate}
 
-O enunciado solicita que a distância seja acompanhada por uma estimativa do
-tempo até o restaurante. Como o sistema não calcula rotas nem recebe a
-velocidade instantânea de cada entregador, adotou-se uma velocidade média
-constante de $30\,\mathrm{km/h}$. Para uma distância $d$ calculada por Haversine,
-o valor exibido na tabela é
+The assignment requires the distance to be accompanied by an estimate of the
+time to reach the restaurant. Because the system neither calculates routes nor
+receives each courier's instantaneous speed, a constant average speed of
+$30\,\mathrm{km/h}$ was adopted. For a distance $d$ calculated with the
+Haversine formula, the value displayed in the table is
 
 \begin{equation}
 t_{\mathrm{min}} = \frac{d}{30}\,60.
 \end{equation}
 
-Essa decisão mantém o cálculo simples, determinístico e suficiente para a
-simulação. O valor deve ser interpretado como uma aproximação em linha reta:
-trânsito, semáforos, relevo e o comprimento real da rota não são considerados.
-Uma extensão futura poderia substituir essa aproximação pelo menor caminho no
-grafo viário e por velocidades associadas a cada trecho.
+This decision keeps the calculation simple, deterministic, and sufficient for
+the simulation. The value should be interpreted as a straight-line
+approximation: traffic, traffic lights, terrain, and actual route length are
+not considered. A future extension could replace this approximation with the
+shortest path in the road graph and speeds associated with each segment.
 
-\section{Geração sintética de entregadores}
+\section{Synthetic courier generation}
 
-A frota é gerada somente a partir dos estabelecimentos que possuem coordenadas.
-Depois de uma embaralhação reproduzível dos centros, os $N$ entregadores são
-atribuídos em rodízio aos restaurantes. Dessa forma, a diferença entre as
-quantidades associadas a quaisquer dois centros utilizados é de, no máximo, uma
-unidade.
+The fleet is generated only from establishments with coordinates. After a
+reproducible shuffle of the centers, the $N$ couriers are assigned to
+restaurants in round-robin order. Consequently, the difference between the
+numbers associated with any two centers used is at most one.
 
-Para cada entregador, são sorteados dois deslocamentos independentes,
-$X,Y \sim \mathcal{N}(0,\sigma^2)$, com $\sigma=500\,\mathrm{m}$
-\cite{normal-nist}. Os
-deslocamentos são convertidos aproximadamente de metros para graus por
+For each courier, two independent offsets are drawn,
+$X,Y \sim \mathcal{N}(0,\sigma^2)$, with $\sigma=500\,\mathrm{m}$
+\cite{normal-nist}. The offsets are approximately converted from meters to
+degrees using
 
 \begin{align}
 \Delta\varphi &=
@@ -315,161 +315,159 @@ deslocamentos são convertidos aproximadamente de metros para graus por
     \frac{Y}{111\,320\max\left(|\cos\varphi|,10^{-12}\right)},
 \end{align}
 
-em que $\varphi$ é a latitude do restaurante. A correção pelo cosseno compensa
-a variação do comprimento de um grau de longitude. No serviço, a semente padrão
-é 42, o que permite repetir os mesmos sorteios em testes e chamadas
-programáticas. No painel, o contador de cliques do botão é usado como semente:
-cada nova geração produz uma simulação diferente, mas o resultado permanece
-determinístico para a mesma entrada, a mesma ordem de restaurantes e o mesmo
-contador.
+where $\varphi$ is the restaurant's latitude. The cosine correction compensates
+for the varying length of one degree of longitude. In the service, the default
+seed is 42, which allows the same draws to be repeated in tests and
+programmatic calls. In the dashboard, the button click counter is used as the
+seed: each new generation produces a different simulation, but the result
+remains deterministic for the same input, restaurant order, and counter value.
 
-A geração matemática tem custo $O(N)$, desconsiderando a projeção viária. Após
-essa projeção, cada entregador recebe um identificador sequencial, as
-coordenadas corrigidas, o identificador do restaurante usado como centro e seu
-Geohash.
+The mathematical generation has a cost of $O(N)$, excluding road-network
+projection. After that projection, each courier receives a sequential
+identifier, the corrected coordinates, the identifier of the restaurant used
+as its center, and its Geohash.
 
-\section{Correção para a malha viária}
+\section{Road-network correction}
 
-Pontos produzidos por uma distribuição contínua podem cair dentro de edifícios,
-quadras ou corpos d'água. Para aproximar posições válidas de circulação, o
-serviço viário usa o OSMnx e dados do OpenStreetMap
+Points produced by a continuous distribution may fall inside buildings, city
+blocks, or bodies of water. To approximate valid positions on the road network,
+the road-network service uses OSMnx and OpenStreetMap data
 \cite{osmnx-docs,osm-copyright}.
 
-Na primeira execução, é obtido o grafo simplificado da rede de automóveis de
-Belo Horizonte (\texttt{network\_type=drive}). O grafo é projetado para um
-sistema de coordenadas adequado a operações métricas e salvo em GraphML. Nas
-execuções seguintes, esse arquivo é reutilizado.
+On the first run, the simplified driving-network graph for Belo Horizonte is
+obtained (\texttt{network\_type=drive}). The graph is projected into a
+coordinate system suitable for metric operations and saved as GraphML. This
+file is reused on subsequent runs.
 
-As coordenadas sintéticas, inicialmente em EPSG:4326, são convertidas para o
-mesmo sistema do grafo. O OSMnx encontra a aresta mais próxima de cada ponto.
-Em seguida, a biblioteca geométrica interpola a posição sobre essa aresta e o
-resultado retorna a EPSG:4326. Quando uma aresta não possui geometria explícita,
-o segmento entre seus nós inicial e final é usado como aproximação.
+The synthetic coordinates, initially in EPSG:4326, are converted to the graph's
+coordinate system. OSMnx finds the nearest edge to each point. The geometry
+library then interpolates the position along that edge, and the result is
+converted back to EPSG:4326. When an edge has no explicit geometry, the segment
+between its start and end nodes is used as an approximation.
 
-Os dados cartográficos são disponibilizados pelo OpenStreetMap sob a licença
-ODbL e requerem atribuição ao projeto e a seus colaboradores
+The map data are made available by OpenStreetMap under the ODbL license and require
+attribution to the project and its contributors
 \cite{osm-copyright}.
 
-\section{Interface interativa}
+\section{Interactive interface}
 
-A aplicação oferece um painel web construído com Dash e Plotly. O painel mantém
-os controles em uma coluna lateral e reserva a maior parte da tela ao mapa do
-OpenStreetMap. O leiaute é responsivo, de modo que, em telas estreitas, os
-controles passam a aparecer acima do mapa.
+The application provides a web dashboard built with Dash and Plotly. The
+dashboard keeps the controls in a side column and reserves most of the screen
+for the OpenStreetMap basemap. The layout is responsive, so on narrow screens
+the controls appear above the map.
 
-O campo de restaurante consulta a base sob demanda, por nome, razão social ou
-endereço. As entradas são normalizadas sem distinção entre caixa e acentos;
-consultas com menos de dois caracteres não são executadas e no máximo 12
-sugestões são enviadas ao navegador. A busca por prefixo nas Tries é
-complementada pelo fallback por substring descrito anteriormente. Ao selecionar
-um resultado geocodificado, o mapa é centralizado no estabelecimento e o
-destaca com uma cor diferente da frota.
+The restaurant field queries the dataset on demand by trade name, legal name,
+or address. Inputs are normalized without regard to case or accents; queries
+shorter than two characters are not executed, and at most 12 suggestions are
+sent to the browser. Prefix search in the Tries is complemented by the
+substring fallback described previously. When a geocoded result is selected,
+the map is centered on the establishment and highlights it in a color distinct
+from the fleet.
 
-O usuário informa a quantidade $N$ e aciona explicitamente a geração. O callback
-valida que o valor seja um inteiro não negativo, executa a geração e substitui o
-estado anterior da sessão pelos novos entregadores. Os pontos são enviados ao
-navegador em formato serializável e exibidos em uma camada gráfica agregada, sem
-criar um componente de interface para cada marcador. Após uma consulta, os
-entregadores aprovados pela filtragem são destacados em verde e os demais
-permanecem cinza. Os restaurantes são exibidos em cinza, exceto o restaurante
-selecionado, destacado em laranja. A interface apresenta como métrica-resumo a
-quantidade de entregadores encontrados. A tabela detalha o identificador, a
-distância, o tempo estimado, as coordenadas e o Geohash de cada resultado,
-ordenados por distância e, em caso de empate, pelo identificador. Durante o
-cálculo, o botão permanece desabilitado; falhas na carga ou
-consulta da malha viária são apresentadas no próprio painel sem apagar a última
-frota válida.
+The user enters the number $N$ and explicitly triggers generation. The
+callback validates that the value is a nonnegative integer, performs the
+generation, and replaces the session's previous state with the new couriers.
+Points are sent to the browser in a serializable format and displayed in an
+aggregated graphical layer without creating one interface component per marker.
+After a query, couriers accepted by the filter are highlighted in green, while
+the others remain gray. Restaurants are displayed in gray, except for the
+selected restaurant, which is highlighted in orange. The interface presents
+the number of couriers found as a summary metric. The table details each
+result's identifier, distance, estimated time, coordinates, and Geohash, sorted
+by distance and, in the event of a tie, by identifier. During the calculation,
+the button remains disabled; failures when loading or querying the road network
+are displayed within the dashboard without erasing the last valid fleet.
 
-\section{Testes e garantia de qualidade}
+\section{Testing and quality assurance}
 
-Os testes automatizados verificam os contratos das partes isoladas e da
-orquestração. Entre os cenários cobertos estão:
+The automated tests verify the contracts of both isolated components and the
+orchestration layer. The covered scenarios include:
 
 \begin{itemize}
-    \item valores conhecidos e entradas inválidas na codificação Geohash;
-    \item inserção, divisão de arestas, busca, remoção e valores da Trie;
-    \item leitura, persistência e retomada do CSV processado;
-    \item consulta e reaproveitamento do cache de geocodificação sem rede real;
-    \item equilíbrio e reprodutibilidade da geração de entregadores;
-    \item projeção sobre uma aresta de um grafo sintético;
-    \item normalização, duplicatas, limites e fallback por substring da busca
-    textual;
-    \item cobertura de células adjacentes e filtragem por Haversine;
-    \item validação dos controles e composição do mapa interativo;
-    \item integração do fluxo principal por meio de substitutos controlados.
+    \item known values and invalid inputs in Geohash encoding;
+    \item Trie insertion, edge splitting, search, removal, and values;
+    \item reading, persistence, and resumption of the processed CSV;
+    \item querying and reusing the geocoding cache without real network access;
+    \item balance and reproducibility in courier generation;
+    \item projection onto an edge of a synthetic graph;
+    \item normalization, duplicates, limits, and substring fallback in text
+    search;
+    \item adjacent-cell coverage and Haversine filtering;
+    \item control validation and interactive map composition;
+    \item integration of the main pipeline using controlled test doubles.
 \end{itemize}
 
-Protocolos para o geocodificador e o projetor viário permitem usar implementações
-falsas nos testes, mantendo a lógica de domínio independente da rede. A
-integração contínua executa análise estática, verificação de formatação, testes e
-construção do pacote com Python 3.12 em Linux e Windows. Na verificação final
-local, os 69 testes automatizados foram aprovados.
+Protocols for the geocoder and road-network projector allow fake
+implementations to be used in tests, keeping the domain logic independent of
+network access. Continuous integration runs static analysis, formatting checks,
+tests, and package builds with Python 3.12 on Linux and Windows. In the final
+local verification, all 69 automated tests passed.
 
-\section{Avaliação experimental}
+\section{Experimental evaluation}
 
-\subsection{Metodologia}
+\subsection{Methodology}
 
-O experimento foi executado localmente com uma única frota de 400 entregadores.
-A frota foi mantida fixa durante todas as consultas para que a variação do número
-de resultados decorresse apenas do restaurante e do raio escolhidos. Foram
-selecionados os restaurantes Pizzaria Guarani e Rei do Pastel e, para cada um,
-foram avaliados os raios de $0{,}5$, $2{,}0$ e $5{,}0\,\mathrm{km}$. Antes das
-medições, a aplicação e a malha viária já estavam carregadas; portanto, os tempos
-não incluem o download inicial do OpenStreetMap nem a geração da frota.
+The experiment was run locally with a single fleet of 400 couriers. The fleet
+was held fixed across all queries so that variation in the number of results
+would be caused only by the selected restaurant and radius. Pizzaria Guarani
+and Rei do Pastel were selected, and radii of $0.5$, $2.0$, and
+$5.0\,\mathrm{km}$ were evaluated for each. Before the measurements, the
+application and road network were already loaded; therefore, the timings do not
+include the initial OpenStreetMap download or fleet generation.
 
-O tempo foi medido com \texttt{time.perf\_counter} no callback acionado pela
-alteração do restaurante ou do raio. A medição começa na entrada do callback e
-termina após a busca geoespacial, a construção da tabela e a preparação da figura
-do mapa. Ela representa, portanto, o tempo de processamento da aplicação no
-servidor, mas não inclui o transporte da resposta nem a renderização final no
-navegador. Cada linha da Tabela~\ref{tab:experiments} corresponde a uma consulta
-registrada também em \path{experiments/results/consultas.csv}.
+Time was measured with \texttt{time.perf\_counter} in the callback triggered by
+a change in the restaurant or radius. Measurement starts upon entering the
+callback and ends after the geospatial search, table construction, and map
+figure preparation. It therefore represents server-side application processing
+time but excludes response transport and final browser rendering. Each row in
+Table~\ref{tab:experiments} corresponds to a query also recorded in
+\path{experiments/results/consultas.csv}.
 
-\subsection{Resultados}
+\subsection{Results}
 
 \begin{table}[htbp]
 \centering
 \small
-\caption{Resultados das consultas com uma frota fixa de 400 entregadores.}
+\caption{Query results with a fixed fleet of 400 couriers.}
 \label{tab:experiments}
 \begin{tabular}{@{}lrrr@{}}
 \toprule
-Restaurante & Raio (km) & Encontrados & Tempo (ms) \\
+Restaurant & Radius (km) & Found & Time (ms) \\
 \midrule
-Pizzaria Guarani & 0,5 & 5   & 722,2 \\
-Pizzaria Guarani & 2,0 & 25  & 744,0 \\
-Pizzaria Guarani & 5,0 & 103 & 770,4 \\
-Rei do Pastel    & 0,5 & 3   & 721,7 \\
-Rei do Pastel    & 2,0 & 35  & 739,8 \\
-Rei do Pastel    & 5,0 & 115 & 925,1 \\
+Pizzaria Guarani & 0.5 & 5   & 722.2 \\
+Pizzaria Guarani & 2.0 & 25  & 744.0 \\
+Pizzaria Guarani & 5.0 & 103 & 770.4 \\
+Rei do Pastel    & 0.5 & 3   & 721.7 \\
+Rei do Pastel    & 2.0 & 35  & 739.8 \\
+Rei do Pastel    & 5.0 & 115 & 925.1 \\
 \midrule
-\multicolumn{3}{r}{Média geral} & 770,5 \\
+\multicolumn{3}{r}{Overall mean} & 770.5 \\
 \bottomrule
 \end{tabular}
 \end{table}
 
-Como esperado, o número de entregadores aprovados cresce com o raio: na Pizzaria
-Guarani, passa de 5 para 103; no Rei do Pastel, de 3 para 115. Isso mostra o
-efeito combinado da expansão das células consultadas e da filtragem final por
-distância. Os tempos para $0{,}5\,\mathrm{km}$ ficaram praticamente iguais
-($722{,}2$ e $721{,}7\,\mathrm{ms}$), e os de $2\,\mathrm{km}$ também foram
-próximos ($744{,}0$ e $739{,}8\,\mathrm{ms}$). Para $5\,\mathrm{km}$, a média
-foi $847{,}8\,\mathrm{ms}$, acima das médias de $722{,}0\,\mathrm{ms}$ para
-$0{,}5\,\mathrm{km}$ e $741{,}9\,\mathrm{ms}$ para $2\,\mathrm{km}$. A maior
-consulta visitou uma região mais ampla, retornou mais registros e exigiu a
-montagem de mais elementos no mapa e na tabela.
+As expected, the number of accepted couriers increases with the radius: from 5
+to 103 at Pizzaria Guarani and from 3 to 115 at Rei do Pastel. This shows the
+combined effect of expanding the queried cells and applying the final distance
+filter. The timings for $0.5\,\mathrm{km}$ were nearly identical
+($722.2$ and $721.7\,\mathrm{ms}$), and those for $2\,\mathrm{km}$ were also
+close ($744.0$ and $739.8\,\mathrm{ms}$). For $5\,\mathrm{km}$, the mean was
+$847.8\,\mathrm{ms}$, higher than the means of $722.0\,\mathrm{ms}$ for
+$0.5\,\mathrm{km}$ and $741.9\,\mathrm{ms}$ for $2\,\mathrm{km}$. The largest
+query visited a wider region, returned more records, and required more elements
+to be assembled in the map and table.
 
-Esses valores avaliam a aplicação completa no lado do servidor, e não apenas a
-operação $O(m+k)$ da Trie. Como foi realizada uma medição por cenário, os números
-devem ser entendidos como uma demonstração funcional, não como um estudo
-estatístico. Uma avaliação futura pode repetir cada cenário diversas vezes e
-separar o tempo exclusivo da busca do custo de construção da visualização.
+These values evaluate the complete server-side application, not just the
+Trie's $O(m+k)$ operation. Because one measurement was taken per scenario, the
+figures should be understood as a functional demonstration rather than a
+statistical study. A future evaluation could repeat each scenario several
+times and separate search time from the cost of constructing the visualization.
 
-A Figura~\ref{fig:experimental-snapshots} registra os seis cenários da
-Tabela~\ref{tab:experiments}. Em cada linha, a Pizzaria Guarani aparece à
-esquerda e o Rei do Pastel à direita; os raios crescem de cima para baixo. No
-raio menor há poucos resultados destacados; no raio maior, a região coberta e a
-tabela de entregadores crescem de forma perceptível.
+Figure~\ref{fig:experimental-snapshots} records the six scenarios from
+Table~\ref{tab:experiments}. In each row, Pizzaria Guarani appears on the left
+and Rei do Pastel on the right; the radii increase from top to bottom. At the
+smallest radius, few results are highlighted; at the largest radius, the
+covered region and courier table grow noticeably.
 
 \begin{figure}[p]
     \centering
@@ -484,79 +482,81 @@ tabela de entregadores crescem de forma perceptível.
     \includegraphics[width=0.45\textwidth]{figures/consulta-restaurante-1-raio-5km.png}
     \hfill
     \includegraphics[width=0.45\textwidth]{figures/consulta-restaurante-2-raio-5km.png}
-    \caption{Snapshots dos seis cenários experimentais. Da primeira à terceira
-    linha, os raios são $0{,}5$, $2$ e $5\,\mathrm{km}$; da esquerda para a
-    direita, Pizzaria Guarani e Rei do Pastel.}
+    \caption{Snapshots of the six experimental scenarios. From the first to the
+    third row, the radii are $0.5$, $2$, and $5\,\mathrm{km}$; from left to
+    right, Pizzaria Guarani and Rei do Pastel.}
     \label{fig:experimental-snapshots}
 \end{figure}
 
 \clearpage
-\section{Conclusão}
+\section{Conclusion}
 
-O DeliveryDispatch atende ao fluxo proposto: prepara a base de restaurantes,
-gera uma frota sintética concentrada em regiões de demanda, corrige as posições
-para a malha viária, indexa os entregadores em uma Trie compacta e combina a
-busca aproximada por Geohash com a filtragem exata por Haversine. A codificação
-Geohash e a Trie foram implementadas diretamente, enquanto bibliotecas externas
-foram reservadas para interface, projeções cartográficas e acesso ao
-OpenStreetMap.
+DeliveryDispatch fulfills the proposed pipeline: it prepares the restaurant
+dataset, generates a synthetic fleet concentrated in demand regions, snaps
+positions to the road network, indexes couriers in a compact Trie, and combines
+approximate Geohash search with exact Haversine filtering. Geohash encoding and
+the Trie were implemented directly, while external libraries were reserved for
+the interface, cartographic projections, and OpenStreetMap access.
 
-As principais decisões buscaram equilibrar correção e simplicidade: células
-adjacentes evitam falsos negativos nas bordas do Geohash; o sufixo único preserva
-entregadores na mesma célula; a distribuição normal aproxima regiões de demanda;
-o cache reduz acessos repetidos aos serviços externos; e a velocidade média de
-$30\,\mathrm{km/h}$ fornece uma estimativa de chegada explícita e reproduzível.
-Nos seis cenários experimentais, a interface retornou de 3 a 115 entregadores,
-com tempos de processamento entre $721{,}7$ e $925{,}1\,\mathrm{ms}$. Os
-resultados e os testes automatizados sustentam a correção funcional da solução,
-enquanto roteamento real e uma avaliação com repetições permanecem como possíveis
-aperfeiçoamentos.
+The main decisions sought to balance correctness and simplicity: adjacent cells
+prevent false negatives at Geohash boundaries; the unique suffix preserves
+couriers in the same cell; the normal distribution approximates demand regions;
+the cache reduces repeated access to external services; and the average speed
+of $30\,\mathrm{km/h}$ provides an explicit and reproducible arrival estimate.
+Across the six experimental scenarios, the interface returned between 3 and
+115 couriers, with processing times ranging from $721.7$ to
+$925.1\,\mathrm{ms}$. The results and automated tests support the functional
+correctness of the solution, while real routing and an evaluation with repeated
+measurements remain possible improvements.
 
 \begin{thebibliography}{9}
 
 \bibitem{enunciado}
 Vimieiro, Renato.
 \emph{Trabalho Prático 1 --- Indexação Geoespacial e Geometria Computacional Híbrida}.
-DCC207 --- Algoritmos 2, Universidade Federal de Minas Gerais, 2026.
+[Practical Assignment 1 --- Geospatial Indexing and Hybrid Computational
+Geometry.]
+DCC207 --- Algorithms 2, Federal University of Minas Gerais, 2026.
 
 \bibitem{aula-trie}
 Vimieiro, Renato.
 \emph{Aula 03 --- Estruturas de dados para casamento de padrões: árvore Trie e de sufixos}.
-Slides da disciplina DCC207 --- Algoritmos 2, DCC/ICEx/UFMG, 2026.
+[Lecture 03 --- Data Structures for Pattern Matching: Trie and Suffix Trees.]
+Course slides for DCC207 --- Algorithms 2, DCC/ICEx/UFMG, 2026.
 
 \bibitem{haversine-sklearn}
 scikit-learn developers.
 \emph{haversine\_distances --- scikit-learn documentation}.
-Disponível em:
+Available at:
 \url{https://scikit-learn.org/stable/modules/generated/sklearn.metrics.pairwise.haversine_distances.html}.
 
 \bibitem{normal-nist}
 National Institute of Standards and Technology.
 \emph{Normal Distribution}. \emph{NIST/SEMATECH e-Handbook of Statistical Methods}.
-Disponível em:
+Available at:
 \url{https://itl.nist.gov/div898/handbook/eda/section3/eda3661.htm}.
 
 \bibitem{elastic-geohash-grid}
 Elastic.
 \emph{Geohash grid aggregation: cell dimensions at the equator}.
-Disponível em:
+Available at:
 \url{https://www.elastic.co/docs/reference/aggregations/search-aggregations-bucket-geohashgrid-aggregation}.
 
 \bibitem{osmnx-docs}
 OSMnx.
 \emph{OSMnx documentation}.
-Disponível em: \url{https://osmnx.readthedocs.io/}.
+Available at: \url{https://osmnx.readthedocs.io/}.
 
 \bibitem{nominatim-policy}
 OpenStreetMap Foundation.
 \emph{Nominatim Usage Policy}.
-Disponível em:
+Available at:
 \url{https://operations.osmfoundation.org/policies/nominatim/}.
 
 \bibitem{osm-copyright}
 OpenStreetMap.
 \emph{Copyright and License}.
-Disponível em: \url{https://www.openstreetmap.org/copyright}.
+Available at: \url{https://www.openstreetmap.org/copyright}.
 
 \end{thebibliography}
 

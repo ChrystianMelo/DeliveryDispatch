@@ -1,60 +1,59 @@
 # DeliveryDispatch
 
-Encontrar entregadores próximos a um restaurante com baixa latência exige organizar posições
-geográficas e reduzir o espaço de busca sem perder precisão. O DeliveryDispatch está sendo
-construído para explorar esse problema em Belo Horizonte, combinando Geohash, Trie compacta,
-simulação espacial e geometria viária.
+Finding nearby couriers for a restaurant with low latency requires organizing geographic
+positions and reducing the search space without sacrificing accuracy. DeliveryDispatch is being
+built to explore this problem in Belo Horizonte by combining Geohash, a compact Trie, spatial
+simulation, and road-network geometry.
 
-Além de avançar a solução, o desenvolvimento exercita estruturas de dados, algoritmos
-geoespaciais, integração com serviços externos e testes automatizados.
+In addition to advancing the solution, its development provides hands-on experience with data
+structures, geospatial algorithms, integration with external services, and automated testing.
 
-## Visão geral
+## Overview
 
-O fluxo implementado atualmente:
+The current workflow is as follows:
 
-- prepara e geocodifica uma base de bares e restaurantes;
-- gera uma frota sintética distribuída ao redor desses estabelecimentos;
-- ajusta as posições dos entregadores à malha viária do OpenStreetMap;
-- converte coordenadas em Geohashes;
-- organiza estabelecimentos e entregadores em índices baseados em Trie compacta;
-- pré-seleciona entregadores pelas células Geohash do restaurante e suas adjacentes;
-- filtra os candidatos por distância de Haversine e destaca apenas os que estão no raio;
-- oferece um painel interativo para pesquisar restaurantes e gerar a frota simulada.
+- prepares and geocodes a dataset of bars and restaurants;
+- generates a synthetic fleet distributed around these establishments;
+- snaps courier positions to the OpenStreetMap road network;
+- converts coordinates into Geohashes;
+- organizes establishments and couriers in compact Trie-based indexes;
+- preselects couriers from the restaurant's Geohash cell and its adjacent cells;
+- filters candidates by Haversine distance and highlights only those within the search radius;
+- provides an interactive dashboard for searching restaurants and generating the simulated fleet.
 
-## Requisitos
+## Requirements
 
-- Python 3.12 ou superior;
-- conexão com a internet caso a base processada ou a malha viária ainda não estejam
-  disponíveis localmente.
+- Python 3.12 or later;
+- an internet connection if the processed dataset or road network is not yet available locally.
 
-## Instalação e execução
+## Installation and usage
 
-No Windows, execute os comandos a partir da raiz do repositório:
+On Windows, run the following commands from the repository root:
 
 ```powershell
 .\scripts\config.bat
 .\scripts\run.bat
 ```
 
-Abra `http://127.0.0.1:8050` no navegador. Na interface, pesquise um restaurante pelo nome
-ou endereço, defina o raio de busca em quilômetros, informe a quantidade `N`
-e selecione **Gerar entregadores**. Cada geração substitui a frota anterior no mapa. Ao selecionar um
-restaurante, os entregadores encontrados no raio ficam verdes e os demais permanecem cinza.
-Os restaurantes não selecionados ficam cinza, enquanto o restaurante selecionado é destacado em
-laranja. Restaurantes usam um símbolo de alimentação, enquanto entregadores usam um símbolo de
-duas rodas.
+Open `http://127.0.0.1:8050` in your browser. In the interface, search for a restaurant by name
+or address, set the search radius in kilometers, enter the number `N`, and select
+**Gerar entregadores** (Generate couriers). Each generation replaces the previous fleet on the
+map. When you select a restaurant, couriers found within the radius turn green,
+while the others remain gray. Unselected restaurants are gray, while the selected restaurant is
+highlighted in orange. Restaurants use a food-service symbol, while couriers use a
+two-wheeled vehicle symbol.
 
-A geração da frota acontece exclusivamente no painel: o comando de execução não aceita uma
-quantidade de entregadores como argumento.
+The fleet is generated exclusively through the dashboard: the run command does not accept a
+number of couriers as an argument.
 
-Para consultar as demais opções:
+To view the other options:
 
 ```powershell
 .\scripts\run.bat --help
 ```
 
 <details>
-<summary>Linux e macOS</summary>
+<summary>Linux and macOS</summary>
 
 ```bash
 python -m venv .venv
@@ -65,49 +64,49 @@ python scripts/tasks.py run
 
 </details>
 
-## Dados e cache
+## Data and cache
 
-A base enriquecida com coordenadas fica em
-`data/processed/bares_geocodificados.csv`. As respostas de geocodificação são armazenadas em
-`data/cache/` para evitar consultas repetidas. A malha viária pronta para uso fica em
-`data/processed/belo_horizonte_drive.graphml`, permitindo distribuí-la junto ao projeto.
+The dataset enriched with coordinates is stored in
+`data/processed/bares_geocodificados.csv`. Geocoding responses are cached in `data/cache/` to
+avoid repeated requests. The ready-to-use road network is stored in
+`data/processed/belo_horizonte_drive.graphml`, allowing it to be distributed with the project.
 
-A opção `--rebuild-processed` recria a base processada. Essa operação pode exigir milhares de
-consultas e deve respeitar a
-[política de uso do Nominatim](https://operations.osmfoundation.org/policies/nominatim/).
+The `--rebuild-processed` option rebuilds the processed dataset. This operation may require
+thousands of requests and must comply with the
+[Nominatim Usage Policy](https://operations.osmfoundation.org/policies/nominatim/).
 
-Na primeira geração da frota, a aplicação também pode baixar a malha viária de Belo Horizonte.
-As gerações seguintes reutilizam o arquivo salvo em `data/processed/`.
+When the fleet is generated for the first time, the application may also download the Belo
+Horizonte road network. Subsequent generations reuse the file saved in `data/processed/`.
 
-Os dados geográficos utilizados são fornecidos por
+The geographic data used by the project is provided by
 [OpenStreetMap](https://www.openstreetmap.org/copyright) contributors.
 
-## Testes
+## Tests
 
-No Windows:
+On Windows:
 
 ```powershell
 .\scripts\run_tests.bat
 ```
 
-Em outros ambientes:
+In other environments:
 
 ```bash
 python scripts/tasks.py test
 ```
 
-## Estrutura
+## Structure
 
-- `src/delivery_dispatch/`: implementação da aplicação;
-- `data/`: bases original, processada e caches locais;
-- `tests/`: testes automatizados;
-- `experiments/`: cenários e resultados experimentais;
-- `docs/`: relatório e documentação.
+- `src/delivery_dispatch/`: application implementation;
+- `data/`: original and processed datasets, plus local caches;
+- `tests/`: automated tests;
+- `experiments/`: experimental scenarios and results;
+- `docs/`: report and documentation.
 
-## Relatório
+## Report
 
-A descrição completa do problema, as decisões de implementação, a análise dos algoritmos e
-os resultados experimentais ficam concentrados no relatório:
+The full problem description, implementation decisions, algorithm analysis, and experimental
+results are consolidated in the report:
 
-- [Fonte em LaTeX](docs/report.tex)
-- [Baixar relatório em PDF](https://github.com/ChrystianMelo/DeliveryDispatch/releases/download/report/report.pdf)
+- [LaTeX source](docs/report.tex)
+- [Download the report as a PDF](https://github.com/ChrystianMelo/DeliveryDispatch/releases/download/report/report.pdf)
