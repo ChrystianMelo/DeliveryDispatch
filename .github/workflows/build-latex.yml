@@ -2,13 +2,17 @@ name: Build LaTeX PDF
 
 on:
   push:
+    branches:
+      - main
     paths:
-      - "docs/**"
-      - ".github/workflows/build-latex.yml"
+      - "README.md"
+      - "docs/report.tex"
+      - "docs/figures/**"
   pull_request:
     paths:
-      - "docs/**"
-      - ".github/workflows/build-latex.yml"
+      - "README.md"
+      - "docs/report.tex"
+      - "docs/figures/**"
   workflow_dispatch:
 
 permissions:
@@ -46,6 +50,9 @@ jobs:
       group: publish-report
       cancel-in-progress: false
     steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
       - name: Download PDF
         uses: actions/download-artifact@v4
         with:
@@ -58,12 +65,20 @@ jobs:
           GH_REPO: ${{ github.repository }}
           REPORT_COMMIT: ${{ github.sha }}
         run: |
-          if gh release view report > /dev/null 2>&1; then
-            gh release upload report docs/report.pdf --clobber
+          SHORT_SHA="${REPORT_COMMIT::7}"
+          REPORT_TAG="report-${SHORT_SHA}"
+          REPORT_TITLE="DeliveryDispatch Report (${SHORT_SHA})"
+
+          if gh release view "$REPORT_TAG" > /dev/null 2>&1; then
+            gh release upload "$REPORT_TAG" docs/report.pdf --clobber
+            gh release edit "$REPORT_TAG" \
+              --title "$REPORT_TITLE" \
+              --notes-file README.md \
+              --latest
           else
-            gh release create report docs/report.pdf \
+            gh release create "$REPORT_TAG" docs/report.pdf \
               --target "$REPORT_COMMIT" \
-              --title "Relatório do TP1" \
-              --notes "PDF atualizado automaticamente a partir de docs/report.tex." \
-              --latest=false
+              --title "$REPORT_TITLE" \
+              --notes-file README.md \
+              --latest
           fi

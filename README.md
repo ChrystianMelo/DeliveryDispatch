@@ -109,4 +109,4 @@ The full problem description, implementation decisions, algorithm analysis, and 
 results are consolidated in the report:
 
 - [LaTeX source](docs/report.tex)
-- [Download the report as a PDF](https://github.com/ChrystianMelo/DeliveryDispatch/releases/download/report/report.pdf)
+- [Download the report as a PDF](https://github.com/ChrystianMelo/DeliveryDispatch/releases/latest/download/report.pdf)
